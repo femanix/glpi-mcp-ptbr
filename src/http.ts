@@ -41,7 +41,7 @@ export class GlpiError extends Error {
   constructor(raw: GlpiRawError) {
     const detail = raw.glpiCode
       ? `${raw.glpiCode}${raw.glpiMessage ? ': ' + raw.glpiMessage : ''}`
-      : raw.body.slice(0, 500);
+      : raw.body.slice(0, 200);
     super(`GLPI ${raw.method} ${raw.url} -> ${raw.status} (${detail})`);
     this.name = 'GlpiError';
     this.status = raw.status;
@@ -192,7 +192,10 @@ export class GlpiHttp {
     if (options.form) init.body = options.form;
     else if (options.json !== undefined) init.body = JSON.stringify(options.json);
 
+    // POST is not idempotent: retrying a request that may have reached GLPI
+    // would duplicate tickets, followups and uploads.
     const maxRetries = this.config.maxRetries ?? 2;
+    const retryable = method !== 'POST';
     const baseDelay = this.config.retryBaseDelayMs ?? 300;
     let attempt = 0;
     let lastError: GlpiError | undefined;
@@ -204,7 +207,7 @@ export class GlpiHttp {
         response = await this.fetchWithTimeout(fullUrl, init);
       } catch (err) {
         // Network error or timeout -> retry with backoff.
-        if (attempt < maxRetries) {
+        if (retryable && attempt < maxRetries) {
           const delay = baseDelay * Math.pow(2, attempt);
           debugLog(`${method} ${path} network error (${err instanceof Error ? err.message : err}), retry in ${delay}ms`);
           await new Promise((r) => setTimeout(r, delay));
@@ -240,7 +243,7 @@ export class GlpiHttp {
       }
 
       // 5xx -> exponential backoff retry.
-      if (response.status >= 500 && attempt < maxRetries) {
+      if (response.status >= 500 && retryable && attempt < maxRetries) {
         const delay = baseDelay * Math.pow(2, attempt);
         debugLog(`${method} ${path} -> ${response.status}, retry in ${delay}ms`);
         await new Promise((r) => setTimeout(r, delay));
