@@ -82,34 +82,34 @@ const ticketSearchSchema = z.object({
 // ---------------------------------------------------------------------------
 
 const TICKET_STATUS: Record<number, string> = {
-  1: 'New',
-  2: 'Processing (assigned)',
-  3: 'Processing (planned)',
-  4: 'Pending',
-  5: 'Solved',
-  6: 'Closed',
+  1: 'Novo',
+  2: 'Em atendimento (atribuído)',
+  3: 'Em atendimento (planejado)',
+  4: 'Pendente',
+  5: 'Solucionado',
+  6: 'Fechado',
 };
 
 const TICKET_URGENCY: Record<number, string> = {
-  1: 'Very low',
-  2: 'Low',
-  3: 'Medium',
-  4: 'High',
-  5: 'Very high',
+  1: 'Muito baixa',
+  2: 'Baixa',
+  3: 'Média',
+  4: 'Alta',
+  5: 'Muito alta',
 };
 
 const PROBLEM_STATUS: Record<number, string> = {
-  1: 'New', 2: 'Accepted', 3: 'Planned', 4: 'Pending', 5: 'Solved', 6: 'Closed',
+  1: 'Novo', 2: 'Aceito', 3: 'Planejado', 4: 'Pendente', 5: 'Solucionado', 6: 'Fechado',
 };
 
 const CHANGE_STATUS: Record<number, string> = {
-  1: 'New', 2: 'Evaluation', 3: 'Approval', 4: 'Accepted', 5: 'Pending',
-  6: 'Test', 7: 'Qualification', 8: 'Applied', 9: 'Review', 10: 'Closed',
-  11: 'Refused', 12: 'Canceled',
+  1: 'Novo', 2: 'Avaliação', 3: 'Aprovação', 4: 'Aceito', 5: 'Pendente',
+  6: 'Teste', 7: 'Qualificação', 8: 'Aplicado', 9: 'Revisão', 10: 'Fechado',
+  11: 'Recusado', 12: 'Cancelado',
 };
 
 const VALIDATION_STATUS: Record<number, string> = {
-  1: 'Waiting', 2: 'Granted', 3: 'Refused',
+  1: 'Aguardando', 2: 'Concedida', 3: 'Recusada',
 };
 
 // Standard Ticket search-option field ids (GLPI ≥ 9.5). Fallbacks; the
@@ -231,6 +231,20 @@ interface CriteriaArg {
   link?: SearchLink;
 }
 
+async function resolveFieldOrThrow(
+  client: GlpiClient,
+  itemtype: string,
+  field: number | string
+): Promise<number> {
+  const id = await client.searchOptions.resolveField(itemtype, field);
+  if (id !== undefined) return id;
+  throw new McpError(
+    ErrorCode.InvalidParams,
+    `campo "${field}" não encontrado em ${itemtype}. Use o id numérico, o uid (ex.: ${itemtype}.name) ` +
+      `ou o nome exatamente como o GLPI mostra; glpi_list_search_options lista as opções.`
+  );
+}
+
 async function resolveCriteria(
   client: GlpiClient,
   itemtype: string,
@@ -238,8 +252,7 @@ async function resolveCriteria(
 ): Promise<SearchCriterion[]> {
   return Promise.all(
     raw.map(async (c) => ({
-      field: (await client.searchOptions.resolveField(itemtype, c.field)) ??
-        (typeof c.field === 'number' ? c.field : 0),
+      field: await resolveFieldOrThrow(client, itemtype, c.field),
       searchtype: c.searchtype,
       value: c.value,
       link: c.link,
@@ -281,12 +294,12 @@ let client: GlpiClient;
 // ---------------------------------------------------------------------------
 
 const LIST_TOOL_COMMON_PROPS = {
-  start: { type: 'number', description: 'Offset (default 0)' },
-  limit: { type: 'number', description: 'Max rows in this call (default 50)' },
-  range: { type: 'string', description: 'Explicit "START-END" range; overrides start/limit' },
-  sort: { type: 'number', description: 'Sort by field id (search option id)' },
+  start: { type: 'number', description: 'Deslocamento inicial (padrão 0)' },
+  limit: { type: 'number', description: 'Máximo de linhas nesta chamada (padrão 50)' },
+  range: { type: 'string', description: 'Intervalo explícito "INÍCIO-FIM"; sobrescreve start/limit' },
+  sort: { type: 'number', description: 'Ordena pelo id do campo (id da search option)' },
   order: { type: 'string', enum: ['ASC', 'DESC'] },
-  expand_dropdowns: { type: 'boolean', description: 'Resolve FK ids to labels (default true)' },
+  expand_dropdowns: { type: 'boolean', description: 'Resolve ids de chaves estrangeiras para rótulos (padrão true)' },
 };
 
 /** MIME types for glpi_upload_document, keyed by lowercase file extension. */
@@ -301,6 +314,15 @@ const UPLOAD_MIME_TYPES: Record<string, string> = {
   '.log': 'text/plain',
   '.csv': 'text/csv',
   '.zip': 'application/zip',
+};
+
+const ASSET_PT: Record<string, { singular: string; plural: string }> = {
+  computers: { singular: 'um computador', plural: 'computadores' },
+  softwares: { singular: 'um software', plural: 'softwares' },
+  network_equipments: { singular: 'um equipamento de rede', plural: 'equipamentos de rede' },
+  printers: { singular: 'uma impressora', plural: 'impressoras' },
+  monitors: { singular: 'um monitor', plural: 'monitores' },
+  phones: { singular: 'um telefone', plural: 'telefones' },
 };
 
 // ---------------------------------------------------------------------------
@@ -344,18 +366,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ============== READ — TICKETS ==============
     {
       name: 'glpi_list_tickets',
-      description: 'List tickets. Supports start/limit/range/sort/order/status filter.',
+      description: 'Lista chamados. Aceita start/limit/range/sort/order e filtro por status.',
       inputSchema: {
         type: 'object',
         properties: {
           ...LIST_TOOL_COMMON_PROPS,
-          status: { type: 'number', description: '1=New 2=Assigned 3=Planned 4=Pending 5=Solved 6=Closed' },
+          status: { type: 'number', description: '1=Novo 2=Atribuído 3=Planejado 4=Pendente 5=Solucionado 6=Fechado' },
         },
       },
     },
     {
       name: 'glpi_get_ticket',
-      description: 'Get a ticket with status/urgency labels and counts of linked items.',
+      description: 'Obtém um chamado com rótulos de status/urgência e contagem dos itens vinculados.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -367,7 +389,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_get_ticket_timeline',
-      description: 'Full chronological timeline of a ticket: followups + tasks + solutions + validations, sorted by date.',
+      description: 'Linha do tempo cronológica completa de um chamado: acompanhamentos + tarefas + soluções + validações, ordenada por data.',
       inputSchema: {
         type: 'object',
         properties: { id: { type: 'number' } },
@@ -376,25 +398,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_search_tickets',
-      description: 'High-level ticket search with friendly params. Use this instead of glpi_search_v2 for tickets.',
+      description: 'Busca de chamados com parâmetros amigáveis. Use no lugar de glpi_search_v2 para chamados.',
       inputSchema: {
         type: 'object',
         properties: {
-          status: { type: 'number', description: '1..6 (see status reference)' },
+          status: { type: 'number', description: '1..6 (veja a referência de status)' },
           assigned_user_id: { type: 'number' },
           assigned_group_id: { type: 'number' },
           requester_user_id: { type: 'number' },
           category_id: { type: 'number' },
           entity_id: { type: 'number' },
-          priority: { type: 'number', description: '1=Very low .. 5=Very high' },
+          priority: { type: 'number', description: '1=Muito baixa .. 5=Muito alta' },
           urgency: { type: 'number', description: '1..5' },
           date_from: { type: 'string', description: 'YYYY-MM-DD HH:MM:SS' },
           date_to: { type: 'string', description: 'YYYY-MM-DD HH:MM:SS' },
-          text_search: { type: 'string', description: 'Free text in title' },
-          open_only: { type: 'boolean', description: 'Status < 5 only' },
+          text_search: { type: 'string', description: 'Texto livre no título' },
+          open_only: { type: 'boolean', description: 'Somente status < 5' },
           start: { type: 'number' },
           limit: { type: 'number' },
-          fetch_all: { type: 'boolean', description: 'Paginate until totalcount; capped by max_rows (default 1000).' },
+          fetch_all: { type: 'boolean', description: 'Pagina até o totalcount; limitado por max_rows (padrão 1000).' },
           max_rows: { type: 'number' },
           order: { type: 'string', enum: ['ASC', 'DESC'] },
           sort: { type: 'number' },
@@ -403,34 +425,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_get_ticket_followups',
-      description: 'List followups of a ticket.',
+      description: 'Lista os acompanhamentos de um chamado.',
       inputSchema: { type: 'object', properties: { ticket_id: { type: 'number' } }, required: ['ticket_id'] },
     },
     {
       name: 'glpi_get_ticket_tasks',
-      description: 'List tasks of a ticket.',
+      description: 'Lista as tarefas de um chamado.',
       inputSchema: { type: 'object', properties: { ticket_id: { type: 'number' } }, required: ['ticket_id'] },
     },
     {
       name: 'glpi_get_ticket_solutions',
-      description: 'List solutions of a ticket.',
+      description: 'Lista as soluções de um chamado.',
       inputSchema: { type: 'object', properties: { ticket_id: { type: 'number' } }, required: ['ticket_id'] },
     },
     {
       name: 'glpi_get_ticket_validations',
-      description: 'List validations (approvals) of a ticket.',
+      description: 'Lista as validações (aprovações) de um chamado.',
       inputSchema: { type: 'object', properties: { ticket_id: { type: 'number' } }, required: ['ticket_id'] },
     },
     {
       name: 'glpi_get_ticket_documents',
-      description: 'List documents (attachments) of a ticket.',
+      description: 'Lista os documentos (anexos) de um chamado.',
       inputSchema: { type: 'object', properties: { ticket_id: { type: 'number' } }, required: ['ticket_id'] },
     },
 
     // ============== WRITE — TICKETS ==============
     {
       name: 'glpi_create_ticket',
-      description: 'Create a new ticket.',
+      description: 'Cria um novo chamado.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -439,7 +461,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           urgency: { type: 'number' },
           impact: { type: 'number' },
           priority: { type: 'number' },
-          type: { type: 'number', description: '1=Incident, 2=Request' },
+          type: { type: 'number', description: '1=Incidente, 2=Requisição' },
           category_id: { type: 'number' },
           entity_id: { type: 'number' },
           user_id_assign: { type: 'number' },
@@ -453,7 +475,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_update_ticket',
-      description: 'Update fields of a ticket.',
+      description: 'Atualiza campos de um chamado.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -471,7 +493,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_delete_ticket',
-      description: '⚠️ DESTRUCTIVE: delete a ticket. force=true purges (irrecoverable).',
+      description: '⚠️ DESTRUTIVO: exclui um chamado. force=true elimina em definitivo (irrecuperável).',
       inputSchema: {
         type: 'object',
         properties: { id: { type: 'number' }, force: { type: 'boolean' } },
@@ -480,7 +502,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_add_followup',
-      description: 'Add a followup comment to a ticket.',
+      description: 'Adiciona um acompanhamento (comentário) a um chamado.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -493,7 +515,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_add_task',
-      description: 'Add a task (with time tracking) to a ticket.',
+      description: 'Adiciona uma tarefa (com controle de tempo) a um chamado.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -501,7 +523,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           content: { type: 'string' },
           actiontime: { type: 'number' },
           is_private: { type: 'boolean' },
-          state: { type: 'number', description: '0=Info 1=Todo 2=Done' },
+          state: { type: 'number', description: '0=Informação 1=A fazer 2=Feito' },
           users_id_tech: { type: 'number' },
           groups_id_tech: { type: 'number' },
         },
@@ -510,7 +532,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_add_solution',
-      description: 'Add a solution to a ticket.',
+      description: 'Adiciona uma solução a um chamado.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -523,7 +545,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_assign_ticket',
-      description: 'Assign a ticket to a user OR a group. type: 1=requester, 2=assigned, 3=observer.',
+      description: 'Atribui um chamado a um usuário OU a um grupo. type: 1=requerente, 2=atribuído, 3=observador.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -537,7 +559,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_link_tickets',
-      description: 'Link two tickets. link_type: 1=link 2=duplicate 3=parent.',
+      description: 'Vincula dois chamados. link_type: 1=vínculo 2=duplicado 3=pai.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -550,12 +572,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_add_ticket_validation',
-      description: 'Request a validation (approval) on a ticket. The chosen user receives the approval request.',
+      description: 'Solicita uma validação (aprovação) em um chamado. O usuário escolhido recebe o pedido de aprovação.',
       inputSchema: {
         type: 'object',
         properties: {
           ticket_id: { type: 'number' },
-          users_id_validate: { type: 'number', description: 'User asked to validate' },
+          users_id_validate: { type: 'number', description: 'Usuário que deve validar' },
           comment_submission: { type: 'string' },
         },
         required: ['ticket_id', 'users_id_validate'],
@@ -563,12 +585,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_set_validation_status',
-      description: 'Approve (2) or refuse (3) an existing TicketValidation. Provide optional comment.',
+      description: 'Aprova (2) ou recusa (3) uma TicketValidation existente. Comentário opcional.',
       inputSchema: {
         type: 'object',
         properties: {
           validation_id: { type: 'number' },
-          status: { type: 'number', enum: [2, 3], description: '2=granted, 3=refused' },
+          status: { type: 'number', enum: [2, 3], description: '2=concedida, 3=recusada' },
           comment_validation: { type: 'string' },
         },
         required: ['validation_id', 'status'],
@@ -577,18 +599,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'glpi_upload_document',
       description:
-        'Upload a local file (by path) as a GLPI Document. Only files inside GLPI_UPLOAD_DIR are accepted; disabled when it is unset. If ticket_id is set, the document is also attached to that ticket.',
+        'Envia um arquivo local (pelo caminho) como Documento do GLPI. Só aceita arquivos dentro de GLPI_UPLOAD_DIR; fica desabilitado quando a variável não está definida. Se ticket_id for informado, o documento também é anexado a esse chamado.',
       inputSchema: {
         type: 'object',
         properties: {
           file_path: {
             type: 'string',
-            description: 'Path of the file on the machine running this server, inside GLPI_UPLOAD_DIR',
+            description: 'Caminho do arquivo na máquina que executa este servidor, dentro de GLPI_UPLOAD_DIR',
           },
-          name: { type: 'string', description: 'Document title (default: file name)' },
+          name: { type: 'string', description: 'Título do documento (padrão: nome do arquivo)' },
           ticket_id: {
             type: 'number',
-            description: 'If set, attach the uploaded document to this ticket',
+            description: 'Se informado, anexa o documento enviado a este chamado',
           },
         },
         required: ['file_path'],
@@ -596,7 +618,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_attach_document_to_ticket',
-      description: 'Link an existing document (uploaded separately) to a ticket via Document_Item.',
+      description: 'Vincula um documento existente (enviado separadamente) a um chamado via Document_Item.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -608,7 +630,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_get_ticket_satisfaction',
-      description: 'Get satisfaction survey data (score, comment) for a ticket.',
+      description: 'Obtém os dados da pesquisa de satisfação (nota, comentário) de um chamado.',
       inputSchema: {
         type: 'object',
         properties: { ticket_id: { type: 'number' } },
@@ -617,7 +639,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_overdue_tickets',
-      description: 'List tickets whose SLA resolution deadline (time_to_resolve) is in the past and status < 5.',
+      description: 'Lista chamados com prazo de solução do SLA (time_to_resolve) vencido e status < 5.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -630,17 +652,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ============== PROBLEMS / CHANGES ==============
     {
       name: 'glpi_list_problems',
-      description: 'List problems.',
+      description: 'Lista problemas.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_problem',
-      description: 'Get a problem with status label.',
+      description: 'Obtém um problema com o rótulo de status.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_problem',
-      description: 'Create a problem.',
+      description: 'Cria um problema.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -653,7 +675,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_update_problem',
-      description: 'Update a problem.',
+      description: 'Atualiza um problema.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -665,17 +687,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_changes',
-      description: 'List changes.',
+      description: 'Lista mudanças.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_change',
-      description: 'Get a change with status label.',
+      description: 'Obtém uma mudança com o rótulo de status.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_change',
-      description: 'Create a change.',
+      description: 'Cria uma mudança.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -688,7 +710,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_update_change',
-      description: 'Update a change.',
+      description: 'Atualiza uma mudança.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -707,12 +729,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       return [
         {
           name: `glpi_list_${asset}`,
-          description: `List ${asset.replace('_', ' ')}.`,
+          description: `Lista ${ASSET_PT[asset].plural}.`,
           inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
         },
         {
           name: `glpi_get_${singular}`,
-          description: `Get a ${singular.replace('_', ' ')} by id.`,
+          description: `Obtém ${ASSET_PT[asset].singular} pelo id.`,
           inputSchema: {
             type: 'object',
             properties: {
@@ -729,7 +751,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     }),
     {
       name: 'glpi_create_computer',
-      description: 'Add a computer to inventory.',
+      description: 'Adiciona um computador ao inventário.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -744,7 +766,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_update_computer',
-      description: 'Update a computer.',
+      description: 'Atualiza um computador.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -756,12 +778,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_delete_computer',
-      description: '⚠️ DESTRUCTIVE: delete a computer. force=true purges.',
+      description: '⚠️ DESTRUTIVO: exclui um computador. force=true elimina em definitivo.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' }, force: { type: 'boolean' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_software',
-      description: 'Add software.',
+      description: 'Adiciona um software.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -775,17 +797,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ============== KB / CONTRACTS / SUPPLIERS / LOCATIONS / PROJECTS ==============
     {
       name: 'glpi_list_knowbase',
-      description: 'List KB articles.',
+      description: 'Lista artigos da base de conhecimento.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_knowbase_item',
-      description: 'Get a KB article.',
+      description: 'Obtém um artigo da base de conhecimento.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_search_knowbase',
-      description: 'Search KB articles by free text in title (field id resolved dynamically).',
+      description: 'Busca artigos da base de conhecimento por texto livre no título (id do campo resolvido dinamicamente).',
       inputSchema: {
         type: 'object',
         properties: { query: { type: 'string' }, limit: { type: 'number' } },
@@ -794,7 +816,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_create_knowbase_item',
-      description: 'Create a KB article.',
+      description: 'Cria um artigo da base de conhecimento.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -806,17 +828,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_contracts',
-      description: 'List contracts.',
+      description: 'Lista contratos.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_contract',
-      description: 'Get a contract.',
+      description: 'Obtém um contrato.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_contract',
-      description: 'Create a contract.',
+      description: 'Cria um contrato.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -829,17 +851,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_suppliers',
-      description: 'List suppliers.',
+      description: 'Lista fornecedores.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_supplier',
-      description: 'Get a supplier.',
+      description: 'Obtém um fornecedor.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_supplier',
-      description: 'Create a supplier.',
+      description: 'Cria um fornecedor.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -852,17 +874,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_locations',
-      description: 'List locations.',
+      description: 'Lista localizações.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_location',
-      description: 'Get a location.',
+      description: 'Obtém uma localização.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_location',
-      description: 'Create a location.',
+      description: 'Cria uma localização.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -875,17 +897,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_projects',
-      description: 'List projects.',
+      description: 'Lista projetos.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_project',
-      description: 'Get a project.',
+      description: 'Obtém um projeto.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_project',
-      description: 'Create a project.',
+      description: 'Cria um projeto.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -898,7 +920,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_update_project',
-      description: 'Update a project (progress, dates, content).',
+      description: 'Atualiza um projeto (progresso, datas, conteúdo).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -913,7 +935,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ============== USERS / GROUPS / CATEGORIES / ENTITIES / DOCUMENTS ==============
     {
       name: 'glpi_list_users',
-      description: 'List users. active_only defaults to true (uses search criteria, not searchText).',
+      description: 'Lista usuários. active_only é true por padrão (usa critérios de busca, não searchText).',
       inputSchema: {
         type: 'object',
         properties: { ...LIST_TOOL_COMMON_PROPS, active_only: { type: 'boolean' } },
@@ -921,17 +943,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_get_user',
-      description: 'Get a user.',
+      description: 'Obtém um usuário.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_search_user',
-      description: 'Search a user by login name (exact "contains" on name field).',
+      description: 'Busca um usuário pelo login (operador "contains" no campo name).',
       inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
     },
     {
       name: 'glpi_create_user',
-      description: 'Create a user.',
+      description: 'Cria um usuário.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -944,17 +966,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_groups',
-      description: 'List groups.',
+      description: 'Lista grupos.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_group',
-      description: 'Get a group.',
+      description: 'Obtém um grupo.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_group',
-      description: 'Create a group.',
+      description: 'Cria um grupo.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -966,7 +988,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_add_user_to_group',
-      description: 'Add a user to a group.',
+      description: 'Adiciona um usuário a um grupo.',
       inputSchema: {
         type: 'object',
         properties: { user_id: { type: 'number' }, group_id: { type: 'number' }, is_manager: { type: 'boolean' } },
@@ -975,34 +997,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_categories',
-      description: 'List ticket categories.',
+      description: 'Lista categorias de chamado.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_list_entities',
-      description: 'List entities.',
+      description: 'Lista entidades.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_entity',
-      description: 'Get an entity.',
+      description: 'Obtém uma entidade.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_list_documents',
-      description: 'List documents.',
+      description: 'Lista documentos.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_document',
-      description: 'Get a document.',
+      description: 'Obtém um documento.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
 
     // ============== STATS ==============
     {
       name: 'glpi_get_ticket_stats',
-      description: 'Ticket counts by status. Optional filters: entity, date_from, date_to.',
+      description: 'Contagem de chamados por status. Filtros opcionais: entity, date_from, date_to.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1014,12 +1036,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_get_asset_stats',
-      description: 'Total counts per asset type (Computer/Monitor/Printer/NetworkEquipment/Phone/Software).',
+      description: 'Contagem total por tipo de ativo (Computer/Monitor/Printer/NetworkEquipment/Phone/Software).',
       inputSchema: { type: 'object', properties: {} },
     },
     {
       name: 'glpi_tickets_stats_by',
-      description: 'Ticket count broken down by a dimension (status / category / technician / entity / month). Optional period filter.',
+      description: 'Contagem de chamados por dimensão (status / category / technician / entity / month). Filtro de período opcional.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1038,14 +1060,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ============== SESSION ==============
     {
       name: 'glpi_get_session_info',
-      description: 'Active profile + available profiles + entities.',
+      description: 'Perfil ativo + perfis disponíveis + entidades.',
       inputSchema: { type: 'object', properties: {} },
     },
 
     // ============== GENERIC SEARCH / COUNT ==============
     {
       name: 'glpi_search_v2',
-      description: 'Multi-criteria search. Use criteria[]: {field, searchtype, value, link}. Supports forcedisplay, sort, order, start/limit, fetch_all.',
+      description: 'Busca com múltiplos critérios. Use criteria[]: {field, searchtype, value, link}. Aceita forcedisplay, sort, order, start/limit, fetch_all.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1055,7 +1077,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             items: {
               type: 'object',
               properties: {
-                field: { description: 'field_id (number) OR friendly name resolved via listSearchOptions' },
+                field: { description: 'field_id (número) OU nome amigável resolvido via listSearchOptions (prefira o uid, ex.: Ticket.status, ou o nome na língua do GLPI)' },
                 searchtype: {
                   type: 'string',
                   enum: ['contains', 'notcontains', 'equals', 'notequals', 'lessthan', 'morethan', 'under', 'notunder', 'empty', 'notempty'],
@@ -1080,7 +1102,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_count',
-      description: 'Return totalcount for an itemtype + criteria (cheap range=0-0 probe).',
+      description: 'Retorna o totalcount de um itemtype + critérios (sonda barata com range=0-0).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1104,7 +1126,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_search_options',
-      description: 'Discover the searchable fields of an itemtype (returns field_id → name/uid/datatype). Useful to build criteria for glpi_search_v2.',
+      description: 'Descobre os campos pesquisáveis de um itemtype (retorna field_id → name/uid/datatype). Útil para montar critérios do glpi_search_v2.',
       inputSchema: {
         type: 'object',
         properties: { itemtype: { type: 'string' } },
@@ -1115,7 +1137,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ============== legacy compat: keep glpi_search (mono-criterion) as deprecated alias ==============
     {
       name: 'glpi_search',
-      description: '[DEPRECATED — prefer glpi_search_v2] Single-criterion search (kept for backward compat).',
+      description: '[OBSOLETA — prefira glpi_search_v2] Busca com um único critério (mantida por compatibilidade).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1878,15 +1900,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
   resources: [
-    { uri: 'glpi://tickets/open', name: 'Open Tickets', description: 'Tickets with status < 5', mimeType: 'application/json' },
-    { uri: 'glpi://tickets/recent', name: 'Recent Tickets', description: 'Most recent tickets', mimeType: 'application/json' },
-    { uri: 'glpi://problems/open', name: 'Open Problems', description: 'Open problems', mimeType: 'application/json' },
-    { uri: 'glpi://changes/pending', name: 'Pending Changes', description: 'Pending changes', mimeType: 'application/json' },
-    { uri: 'glpi://computers', name: 'Computers', description: 'Computers', mimeType: 'application/json' },
-    { uri: 'glpi://groups', name: 'Groups', description: 'Groups', mimeType: 'application/json' },
-    { uri: 'glpi://categories', name: 'Categories', description: 'ITIL categories', mimeType: 'application/json' },
-    { uri: 'glpi://stats/tickets', name: 'Ticket Statistics', description: 'Ticket counts', mimeType: 'application/json' },
-    { uri: 'glpi://stats/assets', name: 'Asset Statistics', description: 'Asset counts', mimeType: 'application/json' },
+    { uri: 'glpi://tickets/open', name: 'Chamados abertos', description: 'Chamados com status < 5', mimeType: 'application/json' },
+    { uri: 'glpi://tickets/recent', name: 'Chamados recentes', description: 'Chamados mais recentes', mimeType: 'application/json' },
+    { uri: 'glpi://problems/open', name: 'Problemas abertos', description: 'Problemas abertos', mimeType: 'application/json' },
+    { uri: 'glpi://changes/pending', name: 'Mudanças pendentes', description: 'Mudanças pendentes', mimeType: 'application/json' },
+    { uri: 'glpi://computers', name: 'Computadores', description: 'Computadores', mimeType: 'application/json' },
+    { uri: 'glpi://groups', name: 'Grupos', description: 'Grupos', mimeType: 'application/json' },
+    { uri: 'glpi://categories', name: 'Categorias', description: 'Categorias ITIL', mimeType: 'application/json' },
+    { uri: 'glpi://stats/tickets', name: 'Estatísticas de chamados', description: 'Contagem de chamados', mimeType: 'application/json' },
+    { uri: 'glpi://stats/assets', name: 'Estatísticas de ativos', description: 'Contagem de ativos', mimeType: 'application/json' },
   ],
 }));
 

@@ -98,3 +98,27 @@ test('searchOptions.get refuses a malformed itemtype before any request', async 
   await assert.rejects(cache.get('../User'), /invalid itemtype/);
   assert.equal(fetchMock.mock.callCount(), 0);
 });
+
+test('resolveField matches pt-BR labels ignoring case and accents', async () => {
+  // @ts-expect-error overriding global fetch
+  global.fetch = mock.fn(async (url: string) => {
+    if (url.endsWith('/initSession')) {
+      return new Response(JSON.stringify({ session_token: 's' }), { status: 200 });
+    }
+    return new Response(
+      JSON.stringify({
+        common: 'Características',
+        1: { name: 'Título', table: 'glpi_tickets', field: 'name', uid: 'Ticket.name' },
+        12: { name: 'Status', table: 'glpi_tickets', field: 'status', uid: 'Ticket.status' },
+        7: { name: 'Categoria', table: 'glpi_itilcategories', field: 'completename', uid: 'Ticket.ITILCategory.completename' },
+      }),
+      { status: 200 }
+    );
+  });
+  const cache = new SearchOptionsCache(new GlpiHttp({ url: 'https://glpi.test', userToken: 'u' }));
+  assert.equal(await cache.resolveField('Ticket', 'titulo'), 1);
+  assert.equal(await cache.resolveField('Ticket', 'TÍTULO'), 1);
+  assert.equal(await cache.resolveField('Ticket', 'Ticket.status'), 12);
+  assert.equal(await cache.resolveField('Ticket', '7'), 7);
+  assert.equal(await cache.resolveField('Ticket', 'inexistente'), undefined);
+});

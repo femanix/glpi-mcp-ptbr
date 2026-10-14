@@ -37,6 +37,11 @@ export interface SearchOptionsCatalogue {
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+/** Case- and accent-insensitive key, so "titulo" matches the pt-BR label "Título". */
+export function normalizeName(name: string): string {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 export class SearchOptionsCache {
   private cache: Map<string, SearchOptionsCatalogue> = new Map();
   private ttlMs: number;
@@ -72,7 +77,7 @@ export class SearchOptionsCache {
    *   1. numeric id passed through
    *   2. explicit uid ("Ticket.status")
    *   3. canonical own-table uid built as "{itemtype}.{ref}" — locale-independent
-   *   4. localized label ("Statut", "Status", ...)
+   *   4. localized label, ignoring case and accents ("Título", "Status", ...)
    *   5. raw SQL column name ("status") — locale-independent fallback
    */
   async resolveField(itemtype: string, ref: string | number): Promise<number | undefined> {
@@ -83,7 +88,7 @@ export class SearchOptionsCache {
     const direct =
       cat.byUid.get(ref) ??
       cat.byUid.get(`${itemtype}.${ref}`) ??
-      cat.byName.get(ref.toLowerCase()) ??
+      cat.byName.get(normalizeName(ref)) ??
       cat.byField.get(ref.toLowerCase());
     return direct?.id;
   }
@@ -115,8 +120,8 @@ export class SearchOptionsCache {
 
       byId.set(id, option);
       if (option.uid && !byUid.has(option.uid)) byUid.set(option.uid, option);
-      if (option.name && !byName.has(option.name.toLowerCase())) {
-        byName.set(option.name.toLowerCase(), option);
+      if (option.name && !byName.has(normalizeName(option.name))) {
+        byName.set(normalizeName(option.name), option);
       }
       // The same column name can appear via joined tables (e.g. "name" on
       // glpi_tickets AND glpi_users for requester/technician). The option
