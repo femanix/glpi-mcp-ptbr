@@ -1,4 +1,4 @@
-# Servidor MCP para GLPI v3
+# glpi-rj-mcp — Servidor MCP para GLPI
 
 Servidor [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) que
 expõe o GLPI (gestão de serviços de TI) para assistentes de IA como o Claude.
@@ -64,9 +64,9 @@ injection). Configuração recomendada:
 
 ### Claude Desktop / Claude Code
 
-**Não use `npx mcp-glpi`**: o nome é o de outro pacote do npm, que não tem as
-proteções deste repositório. Faça o build local e aponte para ele (requer Node
-18 ou superior):
+O pacote não está publicado no npm: faça o build local e aponte para ele
+(requer Node 18 ou superior). Não use `npx mcp-glpi`, que é outro pacote, sem as
+proteções deste repositório.
 
 ```json
 {

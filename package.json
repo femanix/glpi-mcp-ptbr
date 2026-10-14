@@ -1,11 +1,11 @@
 {
-  "name": "mcp-glpi",
+  "name": "glpi-rj-mcp",
   "version": "3.3.0",
   "description": "Servidor MCP para GLPI: gestão de serviços de TI para o Claude. Busca com múltiplos critérios, paginação, resolução dinâmica de campos, linha do tempo de chamados, cobertura ITIL (incidentes, problemas, mudanças, validações), CMDB de ativos e relatórios.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "mcp-glpi": "dist/index.js"
+    "glpi-rj-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -40,7 +40,7 @@
     "llm",
     "automation"
   ],
-  "author": "GMS64260",
+  "author": "femani",
   "license": "MIT",
   "repository": {
     "type": "git",

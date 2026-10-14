@@ -185,7 +185,7 @@ async function main() {
     await check('createTicket [MCP-SMOKE]', async () => {
       const created = (await client.createTicket({
         name: `[MCP-SMOKE] test ${new Date().toISOString()}`,
-        content: 'Automated smoke test from mcp-glpi. Safe to delete.',
+        content: 'Automated smoke test from glpi-rj-mcp. Safe to delete.',
         urgency: 1,
       })) as any;
       testId = created?.id;
