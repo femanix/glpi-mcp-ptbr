@@ -1,171 +1,202 @@
 # Changelog
 
-## Unreleased
+## Não lançado
 
-### Security
+### Segurança
 
-- `glpi_upload_document` only reads files inside `GLPI_UPLOAD_DIR` (symlinks
-  resolved, size capped by `GLPI_MAX_UPLOAD_BYTES`). With the variable unset,
-  uploads are disabled. Previously any readable path could be uploaded.
-- `GLPI_READ_ONLY=1` removes all write tools from the tool list and rejects
-  them at call time.
-- `itemtype` is validated (`[A-Za-z][A-Za-z0-9_]*`) before it is put in the
-  request path.
-- `GLPI_URL` must be `https://` (loopback excepted, or
+- `glpi_upload_document` só lê arquivos dentro de `GLPI_UPLOAD_DIR` (symlinks
+  são resolvidos e o tamanho é limitado por `GLPI_MAX_UPLOAD_BYTES`). Com a
+  variável sem valor, o envio de arquivos fica desabilitado. Antes, qualquer
+  caminho legível podia ser enviado.
+- `GLPI_READ_ONLY=1` remove todas as ferramentas de escrita da lista e as
+  rejeita no momento da chamada.
+- `itemtype` é validado (`[A-Za-z][A-Za-z0-9_]*`) antes de entrar no caminho da
+  requisição.
+- `GLPI_URL` precisa ser `https://` (exceto loopback, ou
   `GLPI_ALLOW_INSECURE_HTTP=1`).
-- POST requests are no longer retried on network errors or 5xx, which could
-  duplicate tickets, followups and uploads.
-- GLPI error bodies returned to the model are cut to 200 characters.
+- Requisições POST não são mais repetidas em erro de rede ou 5xx, o que podia
+  duplicar chamados, acompanhamentos e envios de arquivo.
+- Corpos de erro do GLPI devolvidos ao modelo são cortados em 200 caracteres.
+
+### Alterado
+
+- Descrições das ferramentas e dos recursos em português do Brasil.
+- Rótulos de status, urgência e validação em português, seguindo os nomes do
+  GLPI pt_BR (ex.: `Solucionado`, `Em atendimento (atribuído)`). Isso muda os
+  valores de `status`, `urgency`, `status_label` e as chaves devolvidas por
+  `glpi_tickets_stats_by` com `dimension: "status"`.
+- `resolveField` ignora maiúsculas e acentos ao comparar o nome do campo
+  (`titulo` casa com `Título`).
+- Um campo que não existe nos critérios de busca agora gera `InvalidParams`.
+  Antes, era trocado silenciosamente pelo campo `0`.
+- Dependências atualizadas com `npm audit fix` (0 vulnerabilidades).
 
 ## 3.3.0 — 2026-08-05
 
-### Added
+### Adicionado
 
-- **`glpi_upload_document`**: upload a local file as a GLPI Document via
-  multipart `POST /Document` (`uploadManifest` + `filename[0]`), with an
-  optional `ticket_id` that links the document to the ticket in the same
-  call. The link is declared inside the manifest (`itemtype`/`items_id`) so
-  it also works for restricted profiles (e.g. Self-Service requesters) that
-  cannot `POST Document_Item` directly. MIME type is derived from the file
-  extension.
-- `form` option in the HTTP layer (`GlpiHttp.request`) for multipart bodies:
-  the JSON `Content-Type` is omitted so `fetch` can set the boundary. Note
-  the manifest must be appended as a plain string field — parts carrying a
-  filename land in PHP's `$_FILES` and GLPI reads the manifest from `$_POST`.
-- Tests: multipart header handling, manifest/file pair building, manifest
-  item linking, and default document naming (`test/upload.test.ts`).
+- **`glpi_upload_document`**: envia um arquivo local como Documento do GLPI via
+  `POST /Document` multipart (`uploadManifest` + `filename[0]`), com um
+  `ticket_id` opcional que vincula o documento ao chamado na mesma chamada. O
+  vínculo é declarado dentro do manifesto (`itemtype`/`items_id`), então também
+  funciona para perfis restritos (ex.: requerentes do Self-Service) que não
+  podem fazer `POST Document_Item` diretamente. O tipo MIME vem da extensão do
+  arquivo.
+- Opção `form` na camada HTTP (`GlpiHttp.request`) para corpos multipart: o
+  `Content-Type` JSON é omitido para o `fetch` definir o boundary. O manifesto
+  precisa ser anexado como campo de texto simples, porque partes com nome de
+  arquivo vão para `$_FILES` do PHP e o GLPI lê o manifesto de `$_POST`.
+- Testes: tratamento de cabeçalhos multipart, montagem do par
+  manifesto/arquivo, vínculo ao item pelo manifesto e nome padrão do documento
+  (`test/upload.test.ts`).
 
 ## 3.2.0 — 2026-07-04
 
-### Added
+### Adicionado
 
-- **MCP tool safety annotations** on all 84 tools (fixes #3, AgentSeal findings):
-  - `readOnlyHint: true` on every list/get/search/count/stats tool (56 tools).
-  - `destructiveHint: true` on delete/update/set/assign tools (9 tools) —
-    agents now get an explicit signal before invoking `glpi_delete_ticket`,
-    `glpi_delete_computer`, `glpi_update_*`, etc.
-  - `idempotentHint` and `openWorldHint: false` everywhere (tools only reach
-    the configured GLPI instance).
-  - Annotations are derived from the tool name, so future tools are
-    annotated automatically.
-- **Live smoke test** (`npm run smoke`, `npm run smoke -- --write`):
-  23 checks against a real instance — session, SearchOptions cache, field
-  resolution, count/search/stats, timeline, users/computers/groups/entities,
-  and an optional write cycle (create test ticket → followup → rename →
-  soft delete → verify trash). Reads credentials from env or `.env`
-  (gitignored). Validated against GLPI 11 (French locale).
+- **Anotações de segurança MCP** nas 84 ferramentas (corrige #3, achados do
+  AgentSeal):
+  - `readOnlyHint: true` em toda ferramenta de list/get/search/count/stats
+    (56 ferramentas).
+  - `destructiveHint: true` nas ferramentas de delete/update/set/assign (9
+    ferramentas): os agentes recebem um sinal explícito antes de chamar
+    `glpi_delete_ticket`, `glpi_delete_computer`, `glpi_update_*` etc.
+  - `idempotentHint` e `openWorldHint: false` em todas (as ferramentas só
+    alcançam a instância do GLPI configurada).
+  - As anotações são derivadas do nome da ferramenta, então ferramentas futuras
+    são anotadas automaticamente.
+- **Teste de fumaça ao vivo** (`npm run smoke`, `npm run smoke -- --write`):
+  23 verificações contra uma instância real: sessão, cache de SearchOptions,
+  resolução de campos, count/search/stats, linha do tempo,
+  usuários/computadores/grupos/entidades e um ciclo de escrita opcional (criar
+  chamado de teste → acompanhamento → renomear → exclusão lógica → conferir a
+  lixeira). Lê as credenciais do ambiente ou do `.env` (ignorado pelo git).
+  Validado contra o GLPI 11 (idioma francês).
 
-### Fixed
+### Corrigido
 
-- **Search off-by-one**: `search()` passed `limit` as the range end, but GLPI
-  ranges are inclusive — `limit: 5` returned 6 rows. Affected `glpi_search_v2`,
-  `glpi_search_tickets`, `glpi_count`-adjacent paths and the active-users
-  filter. Found by the live smoke test.
-- **`resolveField` failed on localized instances**: friendly-name resolution
-  only matched the translated label ("Statut" on a French GLPI), so
-  `resolveField('Ticket', 'status')` returned undefined. Resolution now tries,
-  in order: explicit uid → canonical own-table uid (`Ticket.status`) →
-  localized label → raw SQL column name, with own-table priority on column
-  collisions (e.g. `name` exists on both glpi_tickets and joined glpi_users).
+- **Erro de um a mais na busca**: `search()` passava `limit` como fim do
+  intervalo, mas os intervalos do GLPI são inclusivos, então `limit: 5`
+  devolvia 6 linhas. Afetava `glpi_search_v2`, `glpi_search_tickets`, os
+  caminhos próximos de `glpi_count` e o filtro de usuários ativos. Encontrado
+  pelo teste de fumaça ao vivo.
+- **`resolveField` falhava em instâncias traduzidas**: a resolução por nome
+  amigável só comparava o rótulo traduzido ("Statut" num GLPI em francês),
+  então `resolveField('Ticket', 'status')` devolvia undefined. Agora a
+  resolução tenta, em ordem: uid explícito → uid canônico da própria tabela
+  (`Ticket.status`) → rótulo traduzido → nome da coluna SQL, com prioridade para
+  a própria tabela quando há colisão de colunas (ex.: `name` existe em
+  glpi_tickets e em glpi_users, que é juntada).
 
 ## 3.1.0 — 2026-07-04
 
-Reliability hardening after the v3.0.0 audit.
+Reforço de confiabilidade após a auditoria da v3.0.0.
 
-### Added
+### Adicionado
 
-- **Request timeouts**: every HTTP call (including `initSession`) is wrapped in
-  an `AbortController` with a configurable timeout (`GLPI_TIMEOUT_MS`, default
-  15 s). A hung GLPI backend can no longer block the MCP server indefinitely.
-- **Retry on `429` and network errors**: rate-limited responses honour the
-  `Retry-After` header; transient network failures (ECONNRESET, timeouts) are
-  retried with the same exponential backoff as `5xx`.
-- **Runtime input validation (zod)** on ticket tools (`glpi_list_tickets`,
-  `glpi_get_ticket`, `glpi_search_tickets`): invalid arguments now return a
-  clear `InvalidParams` MCP error instead of failing downstream in GLPI.
-- **Differentiated MCP errors**: zod validation → `InvalidParams`;
-  `GlpiError` → message with HTTP status + GLPI code; everything else →
-  `InternalError`.
-- **Config validation at startup**: `GLPI_URL` must be a valid URL and an
-  authentication method must be configured — fail fast with a clear message.
-- **Debug logging** (`GLPI_DEBUG=1`): retries, re-authentication and
-  rate-limiting events are logged to stderr (stdout stays reserved for the MCP
-  stdio transport).
-- **Resilient startup**: if GLPI is unreachable when the server starts, a
-  warning is logged and the session is established lazily on the first request
-  (previously the server exited immediately).
-- New env vars: `GLPI_TIMEOUT_MS`, `GLPI_MAX_RETRIES`, `GLPI_DEBUG`.
-- 3 new HTTP-layer tests (timeout abort, 429 retry, network-error retry) — 7 total.
+- **Timeout de requisições**: toda chamada HTTP (incluindo `initSession`) é
+  envolvida por um `AbortController` com timeout configurável
+  (`GLPI_TIMEOUT_MS`, padrão 15 s). Um backend do GLPI travado não bloqueia
+  mais o servidor MCP indefinidamente.
+- **Retry em `429` e erros de rede**: respostas com limite de taxa respeitam o
+  cabeçalho `Retry-After`; falhas transitórias de rede (ECONNRESET, timeouts)
+  são repetidas com o mesmo backoff exponencial do `5xx`.
+- **Validação de entrada em tempo de execução (zod)** nas ferramentas de
+  chamados (`glpi_list_tickets`, `glpi_get_ticket`, `glpi_search_tickets`):
+  argumentos inválidos retornam um erro MCP `InvalidParams` claro em vez de
+  falhar mais adiante no GLPI.
+- **Erros MCP diferenciados**: validação zod → `InvalidParams`; `GlpiError` →
+  mensagem com status HTTP + código do GLPI; todo o resto → `InternalError`.
+- **Validação da configuração na partida**: `GLPI_URL` precisa ser uma URL
+  válida e um método de autenticação precisa estar configurado; falha rápido
+  com mensagem clara.
+- **Log de depuração** (`GLPI_DEBUG=1`): retries, reautenticação e eventos de
+  limite de taxa vão para o stderr (o stdout continua reservado ao transporte
+  stdio do MCP).
+- **Partida resiliente**: se o GLPI estiver inacessível quando o servidor
+  inicia, é registrado um aviso e a sessão é aberta sob demanda na primeira
+  requisição (antes o servidor encerrava na hora).
+- Novas variáveis de ambiente: `GLPI_TIMEOUT_MS`, `GLPI_MAX_RETRIES`,
+  `GLPI_DEBUG`.
+- 3 novos testes da camada HTTP (abort por timeout, retry em 429, retry em erro
+  de rede), 7 no total.
 
 ## 3.0.0 — 2026-06-08
 
-Major overhaul focused on the foundations and on ITSM/reporting coverage.
+Reformulação grande, focada nas fundações e na cobertura de ITSM e relatórios.
 
-### Added
+### Adicionado
 
-- **Unified HTTP layer** (`src/http.ts`) with:
-  - Automatic re-authentication on `401` (expired `session_token`).
-  - Exponential-backoff retry on `5xx`.
-  - Structured `GlpiError` exposing HTTP status + GLPI error code/message + body.
-- **Multi-criteria search** via the new high-level `GlpiSearch` (`src/search.ts`):
-  - Array of criteria with `link` operator (`AND` / `OR` / `AND NOT` / `OR NOT`).
-  - `forcedisplay` to choose returned columns.
-  - Pagination via `start`/`limit`, `fetch_all` with `max_rows` safety cap (default 1000).
-  - Reads `totalcount` and `Content-Range` header.
-- **`SearchOptionsCache`** (`src/search-options.ts`): caches
-  `/listSearchOptions/{itemtype}` (TTL 1h) so high-level tools translate
-  friendly names ↔ `field_id` resilient to GLPI version drift.
-- **New MCP tools**:
-  - `glpi_count` — cheap totalcount probe (range=0-0) with criteria.
-  - `glpi_search_v2` — multi-criteria search; `glpi_search` kept as deprecated alias.
-  - `glpi_list_search_options` — discover field ids of an itemtype.
-  - `glpi_search_tickets` — friendly params (status, assigned_user/group,
+- **Camada HTTP unificada** (`src/http.ts`) com:
+  - Reautenticação automática em `401` (`session_token` expirado).
+  - Retry com backoff exponencial em `5xx`.
+  - `GlpiError` estruturado, expondo status HTTP + código/mensagem de erro do
+    GLPI + corpo.
+- **Busca com múltiplos critérios** pelo novo `GlpiSearch` de alto nível
+  (`src/search.ts`):
+  - Array de critérios com operador `link` (`AND` / `OR` / `AND NOT` /
+    `OR NOT`).
+  - `forcedisplay` para escolher as colunas devolvidas.
+  - Paginação por `start`/`limit`, `fetch_all` com limite de segurança
+    `max_rows` (padrão 1000).
+  - Lê `totalcount` e o cabeçalho `Content-Range`.
+- **`SearchOptionsCache`** (`src/search-options.ts`): guarda em cache
+  `/listSearchOptions/{itemtype}` (TTL de 1h) para que as ferramentas de alto
+  nível traduzam nomes amigáveis ↔ `field_id` sem quebrar entre versões do GLPI.
+- **Novas ferramentas MCP**:
+  - `glpi_count`: sonda barata de totalcount (range=0-0) com critérios.
+  - `glpi_search_v2`: busca com múltiplos critérios; `glpi_search` fica como
+    alias obsoleto.
+  - `glpi_list_search_options`: descobre os ids de campo de um itemtype.
+  - `glpi_search_tickets`: parâmetros amigáveis (status, assigned_user/group,
     requester, category, entity, priority, urgency, date_from/to, text_search,
-    open_only) translated to criteria internally.
-  - `glpi_get_ticket_timeline` — merged followups + tasks + solutions +
-    validations, sorted chronologically.
-  - `glpi_tickets_stats_by(dimension, period)` — counts ventilated by
-    status / category / technician / entity / month.
-  - `glpi_link_tickets` — Ticket_Ticket relations (link / duplicate / parent).
+    open_only) traduzidos internamente para critérios.
+  - `glpi_get_ticket_timeline`: acompanhamentos + tarefas + soluções +
+    validações combinados e ordenados cronologicamente.
+  - `glpi_tickets_stats_by(dimension, period)`: contagens agrupadas por
+    status / categoria / técnico / entidade / mês.
+  - `glpi_link_tickets`: relações Ticket_Ticket (vínculo / duplicado / pai).
   - `glpi_add_ticket_validation`, `glpi_set_validation_status`,
     `glpi_get_ticket_validations`.
   - `glpi_attach_document_to_ticket`, `glpi_get_ticket_documents`.
   - `glpi_get_ticket_satisfaction`, `glpi_list_overdue_tickets`.
   - `glpi_get_ticket_solutions`.
-  - Symmetric `update`/`delete` on Monitor, Phone, Printer, Software,
-    NetworkEquipment (parity with Computer).
-- **`expand_dropdowns=true` by default** on all detail reads — foreign-key IDs
-  come back resolved (technician name, category label, entity, etc.) while raw
-  IDs remain available alongside.
-- **Tests**: minimal integration tests using `node --test` + `tsx` (HTTP layer,
-  re-auth, retry, error parsing).
+  - `update`/`delete` simétricos em Monitor, Phone, Printer, Software e
+    NetworkEquipment (paridade com Computer).
+- **`expand_dropdowns=true` por padrão** em todas as leituras de detalhe: os
+  ids de chaves estrangeiras voltam resolvidos (nome do técnico, rótulo da
+  categoria, entidade etc.), e os ids brutos continuam disponíveis ao lado.
+- **Testes**: testes de integração mínimos com `node --test` + `tsx` (camada
+  HTTP, reautenticação, retry, leitura de erros).
 
-### Fixed
+### Corrigido
 
-- **F9** — Ticket and asset stats no longer fetch up to 9999 rows just to count
-  them: they now use criteria + `range=0-0` totalcount probes. Accurate beyond
-  10 k tickets, much faster.
-- **F10** — `glpi_list_users` `active_only` filter previously used `searchText`
-  (LIKE on a label column), which silently mismatched. Now uses the search
-  endpoint with `criteria=is_active equals 1`.
-- **F12** — `glpi_assign_ticket` ignored `group_id`. It now routes to
-  `Group_Ticket` when a group is provided, and `Ticket_User` for a user.
-- `glpi_search_knowbase` no longer hard-codes `field=6` for the title; the
-  field id is resolved via `listSearchOptions/KnowbaseItem`.
+- **F9**: as estatísticas de chamados e ativos não buscam mais até 9999 linhas
+  só para contá-las: usam critérios + sondas de totalcount com `range=0-0`.
+  Preciso além de 10 mil chamados e bem mais rápido.
+- **F10**: o filtro `active_only` de `glpi_list_users` usava `searchText` (LIKE
+  numa coluna de rótulo), o que dava resultados errados sem avisar. Agora usa o
+  endpoint de busca com `criteria=is_active equals 1`.
+- **F12**: `glpi_assign_ticket` ignorava `group_id`. Agora envia para
+  `Group_Ticket` quando há grupo e para `Ticket_User` quando há usuário.
+- `glpi_search_knowbase` não fixa mais `field=6` para o título; o id do campo é
+  resolvido por `listSearchOptions/KnowbaseItem`.
 
-### Changed (breaking)
+### Alterado (incompatível)
 
-- **`GlpiClient` constructor**: same shape (`GlpiConfig`) but the internal
-  fetch/session/error layer is now `GlpiHttp`. Public domain methods keep
-  their v2 names; their behaviour is hardened (see Fixed).
-- **`glpi_list_*` tools**: now accept `start`, `range`, `sort`, `order`,
-  `expand_dropdowns`. The previous `limit`-only form still works.
-- **`glpi_search`**: marked deprecated. Prefer `glpi_search_v2`.
-- **Build target**: `strict` TypeScript already, with `tsx` instead of
-  `jest`/`ts-node` for test execution.
+- **Construtor de `GlpiClient`**: mesmo formato (`GlpiConfig`), mas a camada
+  interna de fetch/sessão/erro agora é a `GlpiHttp`. Os métodos de domínio
+  públicos mantêm os nomes da v2 e o comportamento foi reforçado (veja
+  Corrigido).
+- **Ferramentas `glpi_list_*`**: agora aceitam `start`, `range`, `sort`,
+  `order` e `expand_dropdowns`. A forma antiga só com `limit` continua
+  funcionando.
+- **`glpi_search`**: marcada como obsoleta. Prefira `glpi_search_v2`.
+- **Alvo de build**: TypeScript já era `strict`; a execução de testes passa a
+  usar `tsx` em vez de `jest`/`ts-node`.
 
-### Removed
+### Removido
 
-- `eslint` was referenced in `package.json` scripts but never installed; the
-  unused script is removed to avoid confusion. Linting can be reintroduced
-  alongside tests if needed.
+- O `eslint` era citado nos scripts do `package.json`, mas nunca foi
+  instalado; o script sem uso foi removido para evitar confusão. O lint pode
+  voltar junto com os testes, se necessário.

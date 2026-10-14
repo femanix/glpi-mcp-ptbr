@@ -1,219 +1,260 @@
-# MCP Server for GLPI v3
+# Servidor MCP para GLPI v3
 
-A Model Context Protocol (MCP) server that exposes GLPI (IT Service
-Management) to AI assistants like Claude.
+Servidor [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) que
+expõe o GLPI (gestão de serviços de TI) para assistentes de IA como o Claude.
 
-v3 is a foundations-and-coverage overhaul on top of v2. See
-[CHANGELOG.md](./CHANGELOG.md) for the full list of changes; the rest of this
-README documents what's exposed today.
+Este repositório é um fork de `GMS64260/mcp-glpi` com endurecimento de
+segurança e textos em português do Brasil. O histórico de mudanças está no
+[CHANGELOG.md](./CHANGELOG.md); o restante deste README descreve o que o
+servidor expõe hoje.
 
-## What's in v3
+## O que tem na v3
 
-- **Solid foundations**: unified HTTP layer with auto re-authentication on 401,
-  structured errors, retry on 5xx.
-- **Real search**: multi-criteria with `AND` / `OR` / `AND NOT` / `OR NOT`,
-  `forcedisplay`, pagination, `fetch_all`, dedicated count probe.
-- **Dynamic field mapping**: `/listSearchOptions/{itemtype}` is cached so
-  `field_id` ↔ name translations stay valid across GLPI versions.
-- **High-level reporting**: `glpi_search_tickets` accepts friendly params,
-  `glpi_tickets_stats_by` ventilates counts by status / category / technician /
-  entity / month.
-- **Full ITIL coverage**: timeline (followups + tasks + solutions +
-  validations), validations request/approve, ticket linking, document
-  attachment, satisfaction, overdue (SLA) tickets.
-- **Resolved foreign keys by default**: detail views return `users_id_tech: 42`
-  *and* the resolved name, so the LLM doesn't have to guess.
+- **Base sólida**: camada HTTP única com reautenticação automática em 401,
+  erros estruturados e retry em 5xx.
+- **Busca de verdade**: múltiplos critérios com `AND` / `OR` / `AND NOT` /
+  `OR NOT`, `forcedisplay`, paginação, `fetch_all` e sonda de contagem.
+- **Mapeamento dinâmico de campos**: `/listSearchOptions/{itemtype}` fica em
+  cache, então a tradução `field_id` ↔ nome continua válida entre versões do
+  GLPI.
+- **Relatórios de alto nível**: `glpi_search_tickets` aceita parâmetros
+  amigáveis e `glpi_tickets_stats_by` agrupa contagens por status, categoria,
+  técnico, entidade ou mês.
+- **Cobertura ITIL completa**: linha do tempo (acompanhamentos + tarefas +
+  soluções + validações), pedido e aprovação de validações, vínculo entre
+  chamados, anexos, satisfação e chamados com SLA vencido.
+- **Chaves estrangeiras resolvidas por padrão**: as consultas de detalhe
+  devolvem `users_id_tech: 42` *e* o nome resolvido, para o modelo não precisar
+  adivinhar.
 
-## Configuration
+## Configuração
 
-| Env var | Required | Description |
+| Variável | Obrigatória | Descrição |
 |---|---|---|
-| `GLPI_URL` | yes | Base URL of the GLPI instance |
-| `GLPI_APP_TOKEN` | no | Application token (Setup → General → API) |
-| `GLPI_USER_TOKEN` | no\* | User API token |
-| `GLPI_USERNAME` | no\* | Login (when not using user token) |
-| `GLPI_PASSWORD` | no\* | Password (when not using user token) |
-| `GLPI_TIMEOUT_MS` | no | HTTP request timeout in ms (default `15000`) |
-| `GLPI_MAX_RETRIES` | no | Max retries on 5xx / 429 / network errors (default `2`) |
-| `GLPI_DEBUG` | no | Set to any value to log HTTP retries/re-auth to stderr |
-| `GLPI_READ_ONLY` | no | `1` hides and blocks every tool that writes to GLPI (create/update/delete/upload/...) |
-| `GLPI_UPLOAD_DIR` | no | Directory `glpi_upload_document` may read from. **Unset = uploads disabled** |
-| `GLPI_MAX_UPLOAD_BYTES` | no | Max upload size (default 25 MiB) |
-| `GLPI_ALLOW_INSECURE_HTTP` | no | `1` accepts a plain `http://` `GLPI_URL` (https is required otherwise; loopback is always allowed) |
+| `GLPI_URL` | sim | URL base da instância do GLPI |
+| `GLPI_APP_TOKEN` | não | Token da aplicação (Configurar → Geral → API) |
+| `GLPI_USER_TOKEN` | não\* | Token de API do usuário |
+| `GLPI_USERNAME` | não\* | Login (quando não se usa o token de usuário) |
+| `GLPI_PASSWORD` | não\* | Senha (quando não se usa o token de usuário) |
+| `GLPI_TIMEOUT_MS` | não | Timeout das requisições HTTP em ms (padrão `15000`) |
+| `GLPI_MAX_RETRIES` | não | Máximo de tentativas extras em 5xx / 429 / erro de rede (padrão `2`). Requisições POST não são repetidas em 5xx nem em erro de rede |
+| `GLPI_DEBUG` | não | Qualquer valor ativa o log de retries e reautenticação no stderr |
+| `GLPI_READ_ONLY` | não | `1` esconde e bloqueia toda ferramenta que escreve no GLPI (criar/atualizar/excluir/enviar arquivo) |
+| `GLPI_UPLOAD_DIR` | não | Diretório de onde `glpi_upload_document` pode ler arquivos. **Sem valor = envio de arquivos desabilitado** |
+| `GLPI_MAX_UPLOAD_BYTES` | não | Tamanho máximo de envio (padrão 25 MiB) |
+| `GLPI_ALLOW_INSECURE_HTTP` | não | `1` aceita `GLPI_URL` com `http://` puro. Sem isso, só `https://` é aceito (loopback é sempre permitido) |
 
-\* either `GLPI_USER_TOKEN` or `GLPI_USERNAME`+`GLPI_PASSWORD` is required.
+\* é obrigatório informar `GLPI_USER_TOKEN` **ou** `GLPI_USERNAME` +
+`GLPI_PASSWORD`.
 
-### Security notes
+### Segurança
 
-Ticket and KB text is written by other people and reaches the model, so treat
-it as untrusted input (prompt injection). Recommended setup:
+Texto de chamados e da base de conhecimento é escrito por outras pessoas e
+chega ao modelo, então deve ser tratado como entrada não confiável (prompt
+injection). Configuração recomendada:
 
-- Use a dedicated GLPI service user with a minimal profile (no purge, only the entities it needs).
-- Set `GLPI_READ_ONLY=1` unless the agent must write.
-- Leave `GLPI_UPLOAD_DIR` unset, or point it at a directory that holds nothing sensitive.
-- Keep per-call approval of write tools enabled in the MCP client.
+- Use um usuário de serviço dedicado no GLPI, com perfil mínimo (sem permissão
+  de purge e só com as entidades de que precisa).
+- Defina `GLPI_READ_ONLY=1` quando o agente não precisar escrever.
+- Deixe `GLPI_UPLOAD_DIR` vazio ou aponte para uma pasta sem nada sensível.
+- Mantenha no cliente MCP a aprovação manual, a cada chamada, das ferramentas
+  de escrita.
 
 ### Claude Desktop / Claude Code
+
+Como este é um fork com correções de segurança, **não use `npx mcp-glpi`**: isso
+baixaria o pacote original do npm, sem as proteções deste repositório. Faça o
+build local e aponte para ele (requer Node 18 ou superior):
 
 ```json
 {
   "mcpServers": {
     "glpi": {
-      "command": "npx",
-      "args": ["mcp-glpi"],
+      "command": "node",
+      "args": ["/caminho/para/glpi-mcp/dist/index.js"],
       "env": {
         "GLPI_URL": "https://glpi.example.com",
         "GLPI_APP_TOKEN": "...",
-        "GLPI_USER_TOKEN": "..."
+        "GLPI_USER_TOKEN": "...",
+        "GLPI_READ_ONLY": "1"
       }
     }
   }
 }
 ```
 
-## Tool catalogue
+## Catálogo de ferramentas
 
-### Tickets — read
+### Chamados — leitura
 
-| Tool | Description |
+| Ferramenta | Descrição |
 |---|---|
-| `glpi_list_tickets` | List with `start`/`limit`/`range`/`sort`/`order`/`status` |
-| `glpi_get_ticket` | Detail + status/urgency labels + counts of linked items |
-| `glpi_get_ticket_timeline` | Followups + tasks + solutions + validations, chronological |
-| `glpi_search_tickets` | High-level search (status, assigned, requester, dates, ...) |
-| `glpi_get_ticket_followups` | Followups of a ticket |
-| `glpi_get_ticket_tasks` | Tasks |
-| `glpi_get_ticket_solutions` | Solutions |
-| `glpi_get_ticket_validations` | Validations (approvals) |
-| `glpi_get_ticket_documents` | Linked documents |
-| `glpi_get_ticket_satisfaction` | Satisfaction survey result |
-| `glpi_list_overdue_tickets` | Tickets whose SLA deadline has passed |
+| `glpi_list_tickets` | Lista com `start`/`limit`/`range`/`sort`/`order`/`status` |
+| `glpi_get_ticket` | Detalhe + rótulos de status/urgência + contagem de itens vinculados |
+| `glpi_get_ticket_timeline` | Acompanhamentos + tarefas + soluções + validações, em ordem cronológica |
+| `glpi_search_tickets` | Busca de alto nível (status, atribuído, requerente, datas, ...) |
+| `glpi_get_ticket_followups` | Acompanhamentos de um chamado |
+| `glpi_get_ticket_tasks` | Tarefas |
+| `glpi_get_ticket_solutions` | Soluções |
+| `glpi_get_ticket_validations` | Validações (aprovações) |
+| `glpi_get_ticket_documents` | Documentos vinculados |
+| `glpi_get_ticket_satisfaction` | Resultado da pesquisa de satisfação |
+| `glpi_list_overdue_tickets` | Chamados com prazo de SLA vencido |
 
-### Tickets — write
+### Chamados — escrita
 
-| Tool | Description |
+| Ferramenta | Descrição |
 |---|---|
-| `glpi_create_ticket` | Create a ticket |
-| `glpi_update_ticket` | Update fields |
-| `glpi_delete_ticket` | ⚠️ Delete (force=true purges) |
-| `glpi_add_followup` | Add a followup |
-| `glpi_add_task` | Add a task with time tracking |
-| `glpi_add_solution` | Add a solution |
-| `glpi_assign_ticket` | Assign to user OR group |
-| `glpi_link_tickets` | link / duplicate / parent |
-| `glpi_add_ticket_validation` | Request a validation |
-| `glpi_set_validation_status` | Approve (2) or refuse (3) |
-| `glpi_upload_document` | Upload a local file (only from `GLPI_UPLOAD_DIR`) as a Document; `ticket_id` attaches it in the same call |
-| `glpi_attach_document_to_ticket` | Link an uploaded document to a ticket |
+| `glpi_create_ticket` | Cria um chamado |
+| `glpi_update_ticket` | Atualiza campos |
+| `glpi_delete_ticket` | ⚠️ Exclui (`force=true` elimina em definitivo) |
+| `glpi_add_followup` | Adiciona um acompanhamento |
+| `glpi_add_task` | Adiciona uma tarefa com controle de tempo |
+| `glpi_add_solution` | Adiciona uma solução |
+| `glpi_assign_ticket` | Atribui a um usuário OU a um grupo |
+| `glpi_link_tickets` | Vincula (vínculo / duplicado / pai) |
+| `glpi_add_ticket_validation` | Solicita uma validação |
+| `glpi_set_validation_status` | Aprova (2) ou recusa (3) |
+| `glpi_upload_document` | Envia um arquivo local (somente de `GLPI_UPLOAD_DIR`) como Documento; com `ticket_id`, anexa ao chamado na mesma chamada |
+| `glpi_attach_document_to_ticket` | Vincula um documento já enviado a um chamado |
 
-### Problems & Changes
+### Problemas e Mudanças
 
-| Tool | Description |
+| Ferramenta | Descrição |
 |---|---|
-| `glpi_list_problems` / `glpi_get_problem` / `glpi_create_problem` / `glpi_update_problem` | Problem management |
-| `glpi_list_changes` / `glpi_get_change` / `glpi_create_change` / `glpi_update_change` | Change management |
+| `glpi_list_problems` / `glpi_get_problem` / `glpi_create_problem` / `glpi_update_problem` | Gestão de problemas |
+| `glpi_list_changes` / `glpi_get_change` / `glpi_create_change` / `glpi_update_change` | Gestão de mudanças |
 
-### Assets
+### Ativos
 
-| Tool family | Notes |
+| Família | Observações |
 |---|---|
-| Computer, Software, NetworkEquipment, Printer, Monitor, Phone | `list_*`, `get_*`, plus `create`/`update`/`delete` symmetry |
+| Computer, Software, NetworkEquipment, Printer, Monitor, Phone | `list_*` e `get_*`, mais criar/atualizar/excluir onde existir |
 
-### Knowledge base, contracts, suppliers, locations, projects, documents
+### Base de conhecimento, contratos, fornecedores, localizações, projetos, documentos
 
-`glpi_list_*`, `glpi_get_*`, and `glpi_create_*` where the GLPI API allows it.
-`glpi_search_knowbase` performs a free-text search on the title (field id
-resolved dynamically — no longer hard-coded).
+`glpi_list_*`, `glpi_get_*` e `glpi_create_*` onde a API do GLPI permite.
+`glpi_search_knowbase` faz busca por texto livre no título (o id do campo é
+resolvido dinamicamente, não é fixo no código).
 
-### Users, groups, categories, entities
+### Usuários, grupos, categorias, entidades
 
-`glpi_list_users` filters active users via the search endpoint (not
-`searchText`); `glpi_create_user`/`glpi_create_group`/`glpi_add_user_to_group`
-cover provisioning.
+`glpi_list_users` filtra usuários ativos pelo endpoint de busca (não por
+`searchText`); `glpi_create_user`, `glpi_create_group` e
+`glpi_add_user_to_group` cobrem o provisionamento.
 
-### Statistics
+### Estatísticas
 
-| Tool | Description |
+| Ferramenta | Descrição |
 |---|---|
-| `glpi_get_ticket_stats` | Counts by status (optional entity / date filters) |
-| `glpi_get_asset_stats` | Total counts per asset type |
-| `glpi_tickets_stats_by` | Ventilation by `status` / `category` / `technician` / `entity` / `month`, optional period |
+| `glpi_get_ticket_stats` | Contagem por status (filtros opcionais de entidade e data) |
+| `glpi_get_asset_stats` | Contagem total por tipo de ativo |
+| `glpi_tickets_stats_by` | Agrupamento por `status` / `category` / `technician` / `entity` / `month`, com período opcional |
 
-### Generic / introspection
+### Genéricas / introspecção
 
-| Tool | Description |
+| Ferramenta | Descrição |
 |---|---|
-| `glpi_search_v2` | Multi-criteria search (`criteria[]`, `forcedisplay`, `fetch_all`, ...) |
-| `glpi_count` | Cheap totalcount probe with criteria |
-| `glpi_list_search_options` | Catalogue of searchable fields for an itemtype |
-| `glpi_get_session_info` | Active profile + available profiles + entities |
-| `glpi_search` | **Deprecated**: single-criterion alias kept for backward compat |
+| `glpi_search_v2` | Busca com múltiplos critérios (`criteria[]`, `forcedisplay`, `fetch_all`, ...) |
+| `glpi_count` | Sonda barata de totalcount com critérios |
+| `glpi_list_search_options` | Catálogo de campos pesquisáveis de um itemtype |
+| `glpi_get_session_info` | Perfil ativo + perfis disponíveis + entidades |
+| `glpi_search` | **Obsoleta**: alias de critério único, mantido por compatibilidade |
 
-### Resources
+### Recursos
 
 `glpi://tickets/open`, `glpi://tickets/recent`, `glpi://problems/open`,
 `glpi://changes/pending`, `glpi://computers`, `glpi://groups`,
 `glpi://categories`, `glpi://stats/tickets`, `glpi://stats/assets`.
 
-## Reference
+## Campos de busca em GLPI em português
 
-### Ticket status
+Nos critérios de `glpi_search_v2` e `glpi_count`, o campo (`field`) pode ser:
 
-| ID | Label |
+1. o **id numérico** da search option;
+2. o **uid** (ex.: `Ticket.status`, `Ticket.name`), que não depende do idioma e
+   é a forma mais estável;
+3. o **nome como o GLPI mostra** no idioma configurado (ex.: `Título`,
+   `Categoria`). A comparação ignora maiúsculas e acentos, então `titulo`
+   também funciona.
+
+Nomes em inglês (como `Title`) **não** casam num GLPI em português, a não ser que o GLPI use a mesma palavra (ex.: `Status`). Um campo
+que não é encontrado gera erro de parâmetro inválido em vez de ser ignorado.
+Use `glpi_list_search_options` para ver o que está disponível. Os nomes vêm do
+idioma do usuário dono do token de API.
+
+## Referência
+
+Os rótulos abaixo seguem os nomes do GLPI em português do Brasil.
+
+### Status do chamado
+
+| ID | Rótulo |
 |---|---|
-| 1 | New |
-| 2 | Processing (assigned) |
-| 3 | Processing (planned) |
-| 4 | Pending |
-| 5 | Solved |
-| 6 | Closed |
+| 1 | Novo |
+| 2 | Em atendimento (atribuído) |
+| 3 | Em atendimento (planejado) |
+| 4 | Pendente |
+| 5 | Solucionado |
+| 6 | Fechado |
 
-### Validation status
+### Status da validação
 
-| ID | Label |
+| ID | Rótulo |
 |---|---|
-| 1 | Waiting |
-| 2 | Granted |
-| 3 | Refused |
+| 1 | Aguardando |
+| 2 | Concedida |
+| 3 | Recusada |
 
-### Urgency / impact / priority
+### Urgência / impacto / prioridade
 
-| ID | Label |
+| ID | Rótulo |
 |---|---|
-| 1 | Very low |
-| 2 | Low |
-| 3 | Medium |
-| 4 | High |
-| 5 | Very high |
+| 1 | Muito baixa |
+| 2 | Baixa |
+| 3 | Média |
+| 4 | Alta |
+| 5 | Muito alta |
 
-### Change status
+### Status do problema
 
-| ID | Label |
+| ID | Rótulo |
 |---|---|
-| 1 | New |
-| 2 | Evaluation |
-| 3 | Approval |
-| 4 | Accepted |
-| 5 | Pending |
-| 6 | Test |
-| 7 | Qualification |
-| 8 | Applied |
-| 9 | Review |
-| 10 | Closed |
-| 11 | Refused |
-| 12 | Canceled |
+| 1 | Novo |
+| 2 | Aceito |
+| 3 | Planejado |
+| 4 | Pendente |
+| 5 | Solucionado |
+| 6 | Fechado |
 
-## Development
+### Status da mudança
+
+| ID | Rótulo |
+|---|---|
+| 1 | Novo |
+| 2 | Avaliação |
+| 3 | Aprovação |
+| 4 | Aceito |
+| 5 | Pendente |
+| 6 | Teste |
+| 7 | Qualificação |
+| 8 | Aplicado |
+| 9 | Revisão |
+| 10 | Fechado |
+| 11 | Recusado |
+| 12 | Cancelado |
+
+## Desenvolvimento
 
 ```bash
-git clone https://github.com/GMS64260/mcp-glpi.git
+git clone https://github.com/femanix/mcp-glpi.git
 cd mcp-glpi
 npm install
 npm run build
-npm test          # node --test via tsx, mocked fetch
+npm test          # node --test via tsx, fetch simulado
 ```
 
-Run locally:
+Para rodar localmente:
 
 ```bash
 export GLPI_URL="https://glpi.example.com"
@@ -221,13 +262,13 @@ export GLPI_USER_TOKEN="..."
 npm start
 ```
 
-## License
+## Licença
 
 MIT
 
 ## Links
 
-- [GLPI Project](https://glpi-project.org/)
-- [GLPI High-Level API](https://glpi-user-documentation.readthedocs.io/)
+- [Projeto GLPI](https://glpi-project.org/)
+- [Documentação da API do GLPI](https://glpi-user-documentation.readthedocs.io/)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
-- [NPM Package](https://www.npmjs.com/package/mcp-glpi)
+- [Projeto original (GMS64260/mcp-glpi)](https://github.com/GMS64260/mcp-glpi)
