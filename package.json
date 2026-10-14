@@ -44,12 +44,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/femanix/mcp-glpi.git"
+    "url": "https://github.com/femanix/glpi-rj-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/femanix/mcp-glpi/issues"
+    "url": "https://github.com/femanix/glpi-rj-mcp/issues"
   },
-  "homepage": "https://github.com/femanix/mcp-glpi#readme",
+  "homepage": "https://github.com/femanix/glpi-rj-mcp#readme",
   "engines": {
     "node": ">=18.0.0"
   },

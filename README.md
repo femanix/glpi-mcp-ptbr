@@ -249,8 +249,8 @@ Os rótulos abaixo seguem os nomes do GLPI em português do Brasil.
 ## Desenvolvimento
 
 ```bash
-git clone https://github.com/femanix/mcp-glpi.git
-cd mcp-glpi
+git clone https://github.com/femanix/glpi-rj-mcp.git
+cd glpi-rj-mcp
 npm install
 npm run build
 npm test          # node --test via tsx, fetch simulado
