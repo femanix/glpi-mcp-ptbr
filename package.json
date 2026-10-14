@@ -1,7 +1,7 @@
 {
   "name": "mcp-glpi",
   "version": "3.3.0",
-  "description": "MCP Server for GLPI - IT Service Management for Claude. Multi-criteria search, pagination, dynamic field resolution, ticket timeline, ITIL coverage (incidents, problems, changes, validations), asset CMDB, reporting.",
+  "description": "Servidor MCP para GLPI: gestão de serviços de TI para o Claude. Busca com múltiplos critérios, paginação, resolução dinâmica de campos, linha do tempo de chamados, cobertura ITIL (incidentes, problemas, mudanças, validações), CMDB de ativos e relatórios.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -44,12 +44,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GMS64260/mcp-glpi.git"
+    "url": "https://github.com/femanix/mcp-glpi.git"
   },
   "bugs": {
-    "url": "https://github.com/GMS64260/mcp-glpi/issues"
+    "url": "https://github.com/femanix/mcp-glpi/issues"
   },
-  "homepage": "https://github.com/GMS64260/mcp-glpi#readme",
+  "homepage": "https://github.com/femanix/mcp-glpi#readme",
   "engines": {
     "node": ">=18.0.0"
   },

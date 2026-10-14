@@ -3,10 +3,12 @@
 Servidor [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) que
 expõe o GLPI (gestão de serviços de TI) para assistentes de IA como o Claude.
 
-Este repositório é um fork de `GMS64260/mcp-glpi` com endurecimento de
-segurança e textos em português do Brasil. O histórico de mudanças está no
-[CHANGELOG.md](./CHANGELOG.md); o restante deste README descreve o que o
-servidor expõe hoje.
+Projeto em português do Brasil, com endurecimento de segurança para uso
+interno. O histórico de mudanças está no [CHANGELOG.md](./CHANGELOG.md); o
+restante deste README descreve o que o servidor expõe hoje.
+
+Baseado no [mcp-glpi](https://github.com/GMS64260/mcp-glpi) de GMS64260,
+licenciado sob MIT.
 
 ## O que tem na v3
 
@@ -62,9 +64,9 @@ injection). Configuração recomendada:
 
 ### Claude Desktop / Claude Code
 
-Como este é um fork com correções de segurança, **não use `npx mcp-glpi`**: isso
-baixaria o pacote original do npm, sem as proteções deste repositório. Faça o
-build local e aponte para ele (requer Node 18 ou superior):
+**Não use `npx mcp-glpi`**: o nome é o de outro pacote do npm, que não tem as
+proteções deste repositório. Faça o build local e aponte para ele (requer Node
+18 ou superior):
 
 ```json
 {
@@ -271,4 +273,4 @@ MIT
 - [Projeto GLPI](https://glpi-project.org/)
 - [Documentação da API do GLPI](https://glpi-user-documentation.readthedocs.io/)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
-- [Projeto original (GMS64260/mcp-glpi)](https://github.com/GMS64260/mcp-glpi)
+- [mcp-glpi (projeto em que este se baseia)](https://github.com/GMS64260/mcp-glpi)
