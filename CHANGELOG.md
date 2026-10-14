@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- `glpi_upload_document` only reads files inside `GLPI_UPLOAD_DIR` (symlinks
+  resolved, size capped by `GLPI_MAX_UPLOAD_BYTES`). With the variable unset,
+  uploads are disabled. Previously any readable path could be uploaded.
+- `GLPI_READ_ONLY=1` removes all write tools from the tool list and rejects
+  them at call time.
+- `itemtype` is validated (`[A-Za-z][A-Za-z0-9_]*`) before it is put in the
+  request path.
+- `GLPI_URL` must be `https://` (loopback excepted, or
+  `GLPI_ALLOW_INSECURE_HTTP=1`).
+- POST requests are no longer retried on network errors or 5xx, which could
+  duplicate tickets, followups and uploads.
+- GLPI error bodies returned to the model are cut to 200 characters.
+
 ## 3.3.0 — 2026-08-05
 
 ### Added

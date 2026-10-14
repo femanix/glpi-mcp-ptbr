@@ -11,6 +11,7 @@
  */
 
 import { GlpiHttp } from './http.js';
+import { assertItemtype } from './security.js';
 
 export interface SearchOption {
   id: number;
@@ -45,6 +46,7 @@ export class SearchOptionsCache {
   }
 
   async get(itemtype: string): Promise<SearchOptionsCatalogue> {
+    assertItemtype(itemtype);
     const cached = this.cache.get(itemtype);
     if (cached && Date.now() - cached.fetchedAt < this.ttlMs) return cached;
 

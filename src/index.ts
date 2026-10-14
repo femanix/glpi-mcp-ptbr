@@ -31,6 +31,14 @@ import { z } from 'zod';
 import { GlpiClient, GlpiConfig, ListOptions } from './glpi-client.js';
 import { GlpiError } from './http.js';
 import { SearchCriterion, SearchType, SearchLink } from './search.js';
+import {
+  DEFAULT_MAX_UPLOAD_BYTES,
+  assertItemtype,
+  assertSecureUrl,
+  envFlag,
+  isReadTool,
+  resolveUploadPath,
+} from './security.js';
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -137,6 +145,23 @@ function envInt(name: string): number | undefined {
   return n;
 }
 
+/** GLPI_READ_ONLY=1 hides and blocks every tool that writes to GLPI. */
+const READ_ONLY = envFlag(process.env.GLPI_READ_ONLY);
+
+/** glpi_upload_document only reads files below GLPI_UPLOAD_DIR (unset = disabled). */
+const UPLOAD_POLICY = {
+  dir: process.env.GLPI_UPLOAD_DIR || undefined,
+  maxBytes: envInt('GLPI_MAX_UPLOAD_BYTES') ?? DEFAULT_MAX_UPLOAD_BYTES,
+};
+
+function itemtypeArg(args: Record<string, unknown>): string {
+  try {
+    return assertItemtype(args.itemtype);
+  } catch (err) {
+    throw new McpError(ErrorCode.InvalidParams, err instanceof Error ? err.message : String(err));
+  }
+}
+
 function getConfig(): GlpiConfig {
   const url = process.env.GLPI_URL;
   if (!url) throw new Error('GLPI_URL environment variable is required');
@@ -145,6 +170,7 @@ function getConfig(): GlpiConfig {
   } catch {
     throw new Error(`GLPI_URL is not a valid URL: "${url}"`);
   }
+  assertSecureUrl(url, envFlag(process.env.GLPI_ALLOW_INSECURE_HTTP));
 
   const userToken = process.env.GLPI_USER_TOKEN;
   const username = process.env.GLPI_USERNAME;
@@ -551,13 +577,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'glpi_upload_document',
       description:
-        'Upload a local file (by path) as a GLPI Document. If ticket_id is set, the document is also attached to that ticket.',
+        'Upload a local file (by path) as a GLPI Document. Only files inside GLPI_UPLOAD_DIR are accepted; disabled when it is unset. If ticket_id is set, the document is also attached to that ticket.',
       inputSchema: {
         type: 'object',
         properties: {
           file_path: {
             type: 'string',
-            description: 'Path of the file on the machine running this server',
+            description: 'Path of the file on the machine running this server, inside GLPI_UPLOAD_DIR',
           },
           name: { type: 'string', description: 'Document title (default: file name)' },
           ticket_id: {
@@ -1101,7 +1127,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['itemtype', 'field', 'searchtype', 'value'],
       },
     },
-  ].map(annotate),
+  ]
+    .filter((tool) => !READ_ONLY || isReadTool(tool.name))
+    .map(annotate),
 }));
 
 // ---------------------------------------------------------------------------
@@ -1113,6 +1141,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const args = (argsRaw ?? {}) as Record<string, unknown>;
 
   try {
+    if (READ_ONLY && !isReadTool(name)) {
+      throw new McpError(ErrorCode.InvalidRequest, `${name} is disabled: server runs with GLPI_READ_ONLY`);
+    }
     switch (name) {
       // ==== TICKETS — read ====
       case 'glpi_list_tickets': {
@@ -1361,11 +1392,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!filePath) throw new McpError(ErrorCode.InvalidParams, 'file_path required');
         let data: Uint8Array;
         try {
-          data = await readFile(filePath);
+          data = await readFile(await resolveUploadPath(filePath, UPLOAD_POLICY));
         } catch (err) {
           throw new McpError(
             ErrorCode.InvalidParams,
-            `cannot read file "${filePath}": ${err instanceof Error ? err.message : err}`
+            `cannot upload "${filePath}": ${err instanceof Error ? err.message : err}`
           );
         }
         const filename = basename(filePath);
@@ -1762,8 +1793,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ==== SEARCH ====
       case 'glpi_search_v2': {
-        const itemtype = args.itemtype as string;
-        if (!itemtype) throw new McpError(ErrorCode.InvalidParams, 'itemtype required');
+        const itemtype = itemtypeArg(args);
         const rawCriteria = (args.criteria as CriteriaArg[]) ?? [];
         const criteria = await resolveCriteria(client, itemtype, rawCriteria);
         const result = await client.search.search(itemtype, {
@@ -1781,8 +1811,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'glpi_count': {
-        const itemtype = args.itemtype as string;
-        if (!itemtype) throw new McpError(ErrorCode.InvalidParams, 'itemtype required');
+        const itemtype = itemtypeArg(args);
         const rawCriteria = (args.criteria as CriteriaArg[]) ?? [];
         const criteria = await resolveCriteria(client, itemtype, rawCriteria);
         const totalcount = await client.search.count(itemtype, criteria);
@@ -1790,8 +1819,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'glpi_list_search_options': {
-        const itemtype = args.itemtype as string;
-        if (!itemtype) throw new McpError(ErrorCode.InvalidParams, 'itemtype required');
+        const itemtype = itemtypeArg(args);
         const cat = await client.searchOptions.get(itemtype);
         const entries = Array.from(cat.byId.values()).map((o) => ({
           id: o.id, name: o.name, uid: o.uid, table: o.table,
@@ -1803,7 +1831,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // legacy
       case 'glpi_search': {
-        const itemtype = args.itemtype as string;
+        const itemtype = args.itemtype === undefined ? '' : itemtypeArg(args);
         const field = args.field as number;
         const searchtype = args.searchtype as SearchType;
         const value = args.value as string;

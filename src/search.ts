@@ -10,6 +10,7 @@
  */
 
 import { GlpiHttp } from './http.js';
+import { assertItemtype } from './security.js';
 
 export type SearchType =
   | 'contains'
@@ -102,6 +103,7 @@ export class GlpiSearch {
     start: number,
     end: number
   ): Promise<SearchResponse<T>> {
+    assertItemtype(itemtype);
     const params = new URLSearchParams();
 
     (options.criteria ?? []).forEach((c, i) => {

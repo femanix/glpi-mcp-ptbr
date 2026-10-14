@@ -36,8 +36,22 @@ README documents what's exposed today.
 | `GLPI_TIMEOUT_MS` | no | HTTP request timeout in ms (default `15000`) |
 | `GLPI_MAX_RETRIES` | no | Max retries on 5xx / 429 / network errors (default `2`) |
 | `GLPI_DEBUG` | no | Set to any value to log HTTP retries/re-auth to stderr |
+| `GLPI_READ_ONLY` | no | `1` hides and blocks every tool that writes to GLPI (create/update/delete/upload/...) |
+| `GLPI_UPLOAD_DIR` | no | Directory `glpi_upload_document` may read from. **Unset = uploads disabled** |
+| `GLPI_MAX_UPLOAD_BYTES` | no | Max upload size (default 25 MiB) |
+| `GLPI_ALLOW_INSECURE_HTTP` | no | `1` accepts a plain `http://` `GLPI_URL` (https is required otherwise; loopback is always allowed) |
 
 \* either `GLPI_USER_TOKEN` or `GLPI_USERNAME`+`GLPI_PASSWORD` is required.
+
+### Security notes
+
+Ticket and KB text is written by other people and reaches the model, so treat
+it as untrusted input (prompt injection). Recommended setup:
+
+- Use a dedicated GLPI service user with a minimal profile (no purge, only the entities it needs).
+- Set `GLPI_READ_ONLY=1` unless the agent must write.
+- Leave `GLPI_UPLOAD_DIR` unset, or point it at a directory that holds nothing sensitive.
+- Keep per-call approval of write tools enabled in the MCP client.
 
 ### Claude Desktop / Claude Code
 
@@ -89,7 +103,7 @@ README documents what's exposed today.
 | `glpi_link_tickets` | link / duplicate / parent |
 | `glpi_add_ticket_validation` | Request a validation |
 | `glpi_set_validation_status` | Approve (2) or refuse (3) |
-| `glpi_upload_document` | Upload a local file as a Document; `ticket_id` attaches it in the same call |
+| `glpi_upload_document` | Upload a local file (only from `GLPI_UPLOAD_DIR`) as a Document; `ticket_id` attaches it in the same call |
 | `glpi_attach_document_to_ticket` | Link an uploaded document to a ticket |
 
 ### Problems & Changes
