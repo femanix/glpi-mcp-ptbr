@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
 /**
- * MCP Server for GLPI v3.0
+ * Servidor MCP para GLPI v3.0
  *
- * Major changes vs v2:
- *   - Unified HTTP layer with auto-reauth, structured errors, retries.
- *   - List tools accept start/limit/fetch_all/forcedisplay/criteria/sort/order
- *     (backward-compatible: `limit` alone still works).
- *   - New `glpi_count` and `glpi_search_v2` (multi-criteria, forcedisplay).
- *   - High-level `glpi_search_tickets` with friendly params (status/assigned/...).
- *   - `glpi_get_ticket_timeline` merges followups+tasks+solutions+validations.
- *   - `glpi_tickets_stats_by` ventilation by status/category/technician/entity/month.
- *   - Link, validation, document, SLA, satisfaction tools.
- *   - Field-id mapping via /listSearchOptions for resilience across GLPI versions.
+ * Principais mudanças em relação à v2:
+ *   - Camada HTTP unificada com reautenticação automática, erros estruturados e retries.
+ *   - As ferramentas de lista aceitam start/limit/fetch_all/forcedisplay/criteria/sort/order
+ *     (retrocompatível: `limit` sozinho continua funcionando).
+ *   - Novos `glpi_count` e `glpi_search_v2` (múltiplos critérios, forcedisplay).
+ *   - `glpi_search_tickets` de alto nível com parâmetros amigáveis (status/atribuído/...).
+ *   - `glpi_get_ticket_timeline` une acompanhamentos+tarefas+soluções+validações.
+ *   - `glpi_tickets_stats_by` agrupa por status/categoria/técnico/entidade/mês.
+ *   - Ferramentas de vínculo, validação, documento, SLA e satisfação.
+ *   - Mapeamento de field-id via /listSearchOptions, resistente a diferenças entre versões do GLPI.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -41,7 +41,7 @@ import {
 } from './security.js';
 
 // ---------------------------------------------------------------------------
-// Validation Schemas
+// Schemas de validação
 // ---------------------------------------------------------------------------
 
 const listArgsSchema = z.object({
@@ -78,7 +78,7 @@ const ticketSearchSchema = z.object({
 }).passthrough();
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constantes
 // ---------------------------------------------------------------------------
 
 const TICKET_STATUS: Record<number, string> = {
@@ -112,8 +112,8 @@ const VALIDATION_STATUS: Record<number, string> = {
   1: 'Aguardando', 2: 'Concedida', 3: 'Recusada',
 };
 
-// Standard Ticket search-option field ids (GLPI ≥ 9.5). Fallbacks; the
-// SearchOptions cache is used to resolve friendly names dynamically.
+// Ids de campo padrão das search options de Ticket (GLPI ≥ 9.5). São alternativas; o
+// cache de SearchOptions é usado para resolver nomes amigáveis dinamicamente.
 const TICKET_FIELDS = {
   id: 2,
   name: 1,
@@ -134,7 +134,7 @@ const TICKET_FIELDS = {
 };
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Auxiliares
 // ---------------------------------------------------------------------------
 
 function envInt(name: string): number | undefined {
@@ -145,10 +145,10 @@ function envInt(name: string): number | undefined {
   return n;
 }
 
-/** GLPI_READ_ONLY=1 hides and blocks every tool that writes to GLPI. */
+/** GLPI_READ_ONLY=1 esconde e bloqueia toda ferramenta que escreve no GLPI. */
 const READ_ONLY = envFlag(process.env.GLPI_READ_ONLY);
 
-/** glpi_upload_document only reads files below GLPI_UPLOAD_DIR (unset = disabled). */
+/** glpi_upload_document só lê arquivos dentro de GLPI_UPLOAD_DIR (sem valor = desabilitado). */
 const UPLOAD_POLICY = {
   dir: process.env.GLPI_UPLOAD_DIR || undefined,
   maxBytes: envInt('GLPI_MAX_UPLOAD_BYTES') ?? DEFAULT_MAX_UPLOAD_BYTES,
@@ -193,12 +193,12 @@ function getConfig(): GlpiConfig {
 }
 
 /**
- * Parse common list-tool arguments into a ListOptions.
+ * Converte os argumentos comuns das ferramentas de lista em um ListOptions.
  *
- * Accepts (in order of precedence):
- *   - `range`: "START-END" string passed through as-is
- *   - `start` + `limit`: assembled into range
- *   - `limit` alone: range = "0-{limit-1}" (backward-compat with v2)
+ * Aceita (em ordem de precedência):
+ *   - `range`: string "INÍCIO-FIM" repassada como está
+ *   - `start` + `limit`: montados em um range
+ *   - `limit` sozinho: range = "0-{limit-1}" (retrocompatível com a v2)
  */
 function parseListArgs(args: Record<string, unknown> | undefined): ListOptions {
   const opts: ListOptions = {};
@@ -218,7 +218,7 @@ function parseListArgs(args: Record<string, unknown> | undefined): ListOptions {
   if (args.order) opts.order = args.order as 'ASC' | 'DESC';
   if (args.is_deleted !== undefined) opts.is_deleted = args.is_deleted as boolean;
   if (args.include_deleted !== undefined) opts.is_deleted = args.include_deleted as boolean;
-  // Default expand_dropdowns to true for human-readable output.
+  // expand_dropdowns é true por padrão, para a saída ser legível.
   opts.expand_dropdowns =
     args.expand_dropdowns === false ? false : true;
   return opts;
@@ -279,7 +279,7 @@ function formatTicketSummary(t: any) {
 }
 
 // ---------------------------------------------------------------------------
-// Server setup
+// Configuração do servidor
 // ---------------------------------------------------------------------------
 
 const server = new Server(
@@ -290,7 +290,7 @@ const server = new Server(
 let client: GlpiClient;
 
 // ---------------------------------------------------------------------------
-// Tool registration
+// Registro das ferramentas
 // ---------------------------------------------------------------------------
 
 const LIST_TOOL_COMMON_PROPS = {
@@ -302,7 +302,7 @@ const LIST_TOOL_COMMON_PROPS = {
   expand_dropdowns: { type: 'boolean', description: 'Resolve ids de chaves estrangeiras para rótulos (padrão true)' },
 };
 
-/** MIME types for glpi_upload_document, keyed by lowercase file extension. */
+/** Tipos MIME de glpi_upload_document, indexados pela extensão do arquivo em minúsculas. */
 const UPLOAD_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -326,14 +326,14 @@ const ASSET_PT: Record<string, { singular: string; plural: string }> = {
 };
 
 // ---------------------------------------------------------------------------
-// Tool safety annotations (MCP ToolAnnotations)
+// Anotações de segurança das ferramentas (MCP ToolAnnotations)
 //
-// Derived from the tool name so every current and future tool gets hints:
+// Derivadas do nome da ferramenta, para que toda ferramenta atual e futura receba as dicas:
 //   - list/get/search/count/stats  -> readOnlyHint
-//   - delete                       -> destructiveHint (data loss possible)
-//   - update/set/assign            -> destructiveHint (overwrites existing data)
-//   - create/add/link/attach       -> additive write (non-destructive, non-idempotent)
-// openWorldHint is false everywhere: tools only reach the configured GLPI.
+//   - delete                       -> destructiveHint (possível perda de dados)
+//   - update/set/assign            -> destructiveHint (sobrescreve dados existentes)
+//   - create/add/link/attach       -> escrita aditiva (não destrutiva, não idempotente)
+// openWorldHint é false em todas: as ferramentas só alcançam o GLPI configurado.
 // ---------------------------------------------------------------------------
 
 interface ToolAnnotations {
@@ -353,7 +353,7 @@ function toolAnnotations(name: string): ToolAnnotations {
   if (/^glpi_(update_|set_|assign_)/.test(name)) {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }
-  // create / add / link / attach: additive writes. Re-running duplicates data.
+  // create / add / link / attach: escritas aditivas. Repetir a chamada duplica dados.
   return { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 }
 
@@ -363,7 +363,7 @@ function annotate<T extends { name: string }>(tool: T): T & { annotations: ToolA
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
-    // ============== READ — TICKETS ==============
+    // ============== LEITURA — CHAMADOS ==============
     {
       name: 'glpi_list_tickets',
       description: 'Lista chamados. Aceita start/limit/range/sort/order e filtro por status.',
@@ -449,7 +449,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: { type: 'object', properties: { ticket_id: { type: 'number' } }, required: ['ticket_id'] },
     },
 
-    // ============== WRITE — TICKETS ==============
+    // ============== ESCRITA — CHAMADOS ==============
     {
       name: 'glpi_create_ticket',
       description: 'Cria um novo chamado.',
@@ -649,7 +649,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
-    // ============== PROBLEMS / CHANGES ==============
+    // ============== PROBLEMAS / MUDANÇAS ==============
     {
       name: 'glpi_list_problems',
       description: 'Lista problemas.',
@@ -721,7 +721,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
-    // ============== ASSETS ==============
+    // ============== ATIVOS ==============
     ...[
       'computers', 'softwares', 'network_equipments', 'printers', 'monitors', 'phones',
     ].flatMap((asset) => {
@@ -794,7 +794,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
-    // ============== KB / CONTRACTS / SUPPLIERS / LOCATIONS / PROJECTS ==============
+    // ============== BASE DE CONHECIMENTO / CONTRATOS / FORNECEDORES / LOCALIZAÇÕES / PROJETOS ==============
     {
       name: 'glpi_list_knowbase',
       description: 'Lista artigos da base de conhecimento.',
@@ -932,7 +932,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
-    // ============== USERS / GROUPS / CATEGORIES / ENTITIES / DOCUMENTS ==============
+    // ============== USUÁRIOS / GRUPOS / CATEGORIAS / ENTIDADES / DOCUMENTOS ==============
     {
       name: 'glpi_list_users',
       description: 'Lista usuários. active_only é true por padrão (usa critérios de busca, não searchText).',
@@ -1021,7 +1021,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
 
-    // ============== STATS ==============
+    // ============== ESTATÍSTICAS ==============
     {
       name: 'glpi_get_ticket_stats',
       description: 'Contagem de chamados por status. Filtros opcionais: entity, date_from, date_to.',
@@ -1057,14 +1057,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
-    // ============== SESSION ==============
+    // ============== SESSÃO ==============
     {
       name: 'glpi_get_session_info',
       description: 'Perfil ativo + perfis disponíveis + entidades.',
       inputSchema: { type: 'object', properties: {} },
     },
 
-    // ============== GENERIC SEARCH / COUNT ==============
+    // ============== BUSCA GENÉRICA / CONTAGEM ==============
     {
       name: 'glpi_search_v2',
       description: 'Busca com múltiplos critérios. Use criteria[]: {field, searchtype, value, link}. Aceita forcedisplay, sort, order, start/limit, fetch_all.',
@@ -1134,7 +1134,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
-    // ============== legacy compat: keep glpi_search (mono-criterion) as deprecated alias ==============
+    // ============== compatibilidade legada: mantém glpi_search (critério único) como alias obsoleto ==============
     {
       name: 'glpi_search',
       description: '[OBSOLETA — prefira glpi_search_v2] Busca com um único critério (mantida por compatibilidade).',
@@ -1155,7 +1155,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Tool dispatch
+// Despacho das ferramentas
 // ---------------------------------------------------------------------------
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -1167,7 +1167,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new McpError(ErrorCode.InvalidRequest, `${name} is disabled: server runs with GLPI_READ_ONLY`);
     }
     switch (name) {
-      // ==== TICKETS — read ====
+      // ==== CHAMADOS — leitura ====
       case 'glpi_list_tickets': {
         const validated = listArgsSchema.parse(args);
         const opts = parseListArgs(validated);
@@ -1287,7 +1287,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text(await client.getTicketDocuments(id));
       }
 
-      // ==== TICKETS — write ====
+      // ==== CHAMADOS — escrita ====
       case 'glpi_create_ticket': {
         const name = args.name as string;
         const content = args.content as string;
@@ -1423,9 +1423,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const filename = basename(filePath);
         const ticket_id = args.ticket_id as number | undefined;
-        // Linking via the manifest (itemtype/items_id) lets GLPI create the
-        // Document_Item itself, which also works for restricted profiles that
-        // cannot POST Document_Item directly.
+        // Vincular pelo manifesto (itemtype/items_id) faz o GLPI criar o
+        // Document_Item sozinho, o que também funciona para perfis restritos que
+        // não podem fazer POST direto em Document_Item.
         const document = await client.uploadDocument({
           filename,
           data,
@@ -1456,7 +1456,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
         const criteria: SearchCriterion[] = [
           { field: TICKET_FIELDS.status, searchtype: 'lessthan', value: 5 },
-          // time_to_resolve search-option id is typically 18; fall back to 18.
+          // o id da search option de time_to_resolve costuma ser 18; usa 18 como alternativa.
           { field: 18, searchtype: 'lessthan', value: now, link: 'AND' },
           { field: 18, searchtype: 'notempty', value: '', link: 'AND' },
         ];
@@ -1477,7 +1477,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
       }
 
-      // ==== PROBLEMS / CHANGES ====
+      // ==== PROBLEMAS / MUDANÇAS ====
       case 'glpi_list_problems': {
         const list = await client.getProblems({ ...parseListArgs(args), order: 'DESC' });
         return text(list.map((p: any) => ({
@@ -1556,7 +1556,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text({ success: true, id });
       }
 
-      // ==== ASSETS ====
+      // ==== ATIVOS ====
       case 'glpi_list_computers':
         return text(await client.getComputers(parseListArgs(args)));
       case 'glpi_get_computer':
@@ -1607,7 +1607,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_get_phone':
         return text(await client.getPhone(args.id as number));
 
-      // ==== KB / CONTRACTS / SUPPLIERS / LOCATIONS / PROJECTS ====
+      // ==== BASE DE CONHECIMENTO / CONTRATOS / FORNECEDORES / LOCALIZAÇÕES / PROJETOS ====
       case 'glpi_list_knowbase':
         return text(await client.getKnowbaseItems(parseListArgs(args)));
       case 'glpi_get_knowbase_item':
@@ -1661,7 +1661,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text({ success: true, id });
       }
 
-      // ==== USERS / GROUPS ====
+      // ==== USUÁRIOS / GRUPOS ====
       case 'glpi_list_users':
         return text(await client.getUsers({
           ...parseListArgs(args),
@@ -1711,7 +1711,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_get_document':
         return text(await client.getDocument(args.id as number));
 
-      // ==== STATS ====
+      // ==== ESTATÍSTICAS ====
       case 'glpi_get_ticket_stats': {
         const stats = await client.getTicketStats({
           entity_id: args.entity_id as number,
@@ -1777,7 +1777,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (n > 0) counts[e.completename ?? e.name] = n;
           }
         } else if (dimension === 'month') {
-          // Compute monthly buckets between date_from and date_to (or last 6 months).
+          // Calcula os intervalos mensais entre date_from e date_to (ou os últimos 6 meses).
           const to = args.date_to ? new Date(args.date_to as string) : new Date();
           const from = args.date_from ? new Date(args.date_from as string) : new Date(to.getFullYear(), to.getMonth() - 5, 1);
           const cursor = new Date(from.getFullYear(), from.getMonth(), 1);
@@ -1803,7 +1803,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text({ dimension, counts, total: Object.values(counts).reduce((s, n) => s + n, 0) });
       }
 
-      // ==== SESSION ====
+      // ==== SESSÃO ====
       case 'glpi_get_session_info': {
         const [profile, profiles, entities] = await Promise.all([
           client.getActiveProfile(),
@@ -1813,7 +1813,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text({ active_profile: profile, available_profiles: profiles, entities });
       }
 
-      // ==== SEARCH ====
+      // ==== BUSCA ====
       case 'glpi_search_v2': {
         const itemtype = itemtypeArg(args);
         const rawCriteria = (args.criteria as CriteriaArg[]) ?? [];
@@ -1851,7 +1851,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text({ itemtype, count: entries.length, options: entries });
       }
 
-      // legacy
+      // legado
       case 'glpi_search': {
         const itemtype = args.itemtype === undefined ? '' : itemtypeArg(args);
         const field = args.field as number;
@@ -1895,7 +1895,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // ---------------------------------------------------------------------------
-// Resources
+// Recursos
 // ---------------------------------------------------------------------------
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
@@ -1963,7 +1963,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 });
 
 // ---------------------------------------------------------------------------
-// Main
+// Principal
 // ---------------------------------------------------------------------------
 
 async function main() {
@@ -1971,8 +1971,8 @@ async function main() {
     const config = getConfig();
     client = new GlpiClient(config);
 
-    // Try to open the session eagerly, but don't die if GLPI is momentarily
-    // unreachable: the HTTP layer re-authenticates lazily on first request.
+    // Tenta abrir a sessão logo na partida, mas não encerra se o GLPI estiver
+    // momentaneamente inacessível: a camada HTTP reautentica sob demanda na primeira requisição.
     try {
       await client.initSession();
       console.error('GLPI session initialized');

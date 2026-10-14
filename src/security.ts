@@ -1,10 +1,10 @@
 /**
- * Security guards shared by the MCP server and the HTTP layer.
+ * Proteções compartilhadas pelo servidor MCP e pela camada HTTP.
  *
- * - GLPI_READ_ONLY: hide and block every tool that writes to GLPI.
- * - GLPI_UPLOAD_DIR: confine glpi_upload_document to one directory.
- * - Itemtype validation: itemtype ends up in the URL path.
- * - GLPI_URL must be https (http only for loopback hosts).
+ * - GLPI_READ_ONLY: esconde e bloqueia toda ferramenta que escreve no GLPI.
+ * - GLPI_UPLOAD_DIR: restringe glpi_upload_document a um único diretório.
+ * - Validação de itemtype: o itemtype vai parar no caminho da URL.
+ * - GLPI_URL precisa ser https (http só para hosts de loopback).
  */
 
 import { realpath, stat } from 'node:fs/promises';
@@ -17,10 +17,10 @@ export function envFlag(raw: string | undefined): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Read-only mode
+// Modo somente leitura
 // ---------------------------------------------------------------------------
 
-/** Tools that only read from GLPI. Everything else is treated as a write. */
+/** Ferramentas que só leem do GLPI. Todo o resto é tratado como escrita. */
 export function isReadTool(name: string): boolean {
   return /^glpi_(list_|get_|search|count$|tickets_stats)/.test(name);
 }
@@ -29,8 +29,8 @@ export function isReadTool(name: string): boolean {
 // Itemtype
 // ---------------------------------------------------------------------------
 
-// GLPI itemtypes are PHP class names (e.g. "Ticket", "PluginFieldsContainer").
-// Anything with `/`, `?`, `#`, `.` or `\` would change the request path or query.
+// Itemtypes do GLPI são nomes de classe PHP (ex.: "Ticket", "PluginFieldsContainer").
+// Qualquer coisa com `/`, `?`, `#`, `.` ou `\` mudaria o caminho ou a query da requisição.
 const ITEMTYPE_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 
 export function assertItemtype(itemtype: unknown): string {
@@ -48,7 +48,7 @@ export function assertItemtype(itemtype: unknown): string {
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 
-/** Reject plain http unless the host is loopback or GLPI_ALLOW_INSECURE_HTTP is set. */
+/** Rejeita http puro, a menos que o host seja loopback ou GLPI_ALLOW_INSECURE_HTTP esteja definido. */
 export function assertSecureUrl(rawUrl: string, allowInsecure = false): void {
   const url = new URL(rawUrl);
   if (url.protocol === 'https:') return;
@@ -60,21 +60,21 @@ export function assertSecureUrl(rawUrl: string, allowInsecure = false): void {
 }
 
 // ---------------------------------------------------------------------------
-// Upload path
+// Caminho de upload
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export interface UploadPolicy {
-  /** Directory uploads are confined to. Undefined means uploads are disabled. */
+  /** Diretório ao qual os uploads ficam restritos. Indefinido significa uploads desabilitados. */
   dir?: string;
   maxBytes: number;
 }
 
 /**
- * Resolve `filePath` inside the upload directory and return its real path.
- * Symlinks are followed before the containment check, so a link inside the
- * directory cannot point outside it.
+ * Resolve `filePath` dentro do diretório de upload e devolve o caminho real.
+ * Symlinks são seguidos antes da checagem de contenção, então um link dentro do
+ * diretório não pode apontar para fora dele.
  */
 export async function resolveUploadPath(
   filePath: string,

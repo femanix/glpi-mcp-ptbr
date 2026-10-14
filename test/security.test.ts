@@ -1,7 +1,7 @@
 /**
- * Tests for the security guards (src/security.ts) and POST no-retry.
+ * Testes das proteções de segurança (src/security.ts) e do POST sem retry.
  *
- * Run with: npm test
+ * Execute com: npm test
  */
 
 import { strict as assert } from 'node:assert';
@@ -73,7 +73,7 @@ test('resolveUploadPath confines reads to the upload dir', async () => {
 
 test('POST is not retried on 5xx or network error', async () => {
   let posts = 0;
-  // @ts-expect-error overriding global fetch
+  // @ts-expect-error substitui o fetch global
   global.fetch = mock.fn(async (url: string, init?: RequestInit) => {
     if (url.endsWith('/initSession')) {
       return new Response(JSON.stringify({ session_token: 's' }), { status: 200 });
@@ -91,7 +91,7 @@ test('POST is not retried on 5xx or network error', async () => {
 
 test('searchOptions.get refuses a malformed itemtype before any request', async () => {
   const fetchMock = mock.fn(async () => new Response('{}', { status: 200 }));
-  // @ts-expect-error overriding global fetch
+  // @ts-expect-error substitui o fetch global
   global.fetch = fetchMock;
   const http = new GlpiHttp({ url: 'https://glpi.test', userToken: 'u' });
   const cache = new SearchOptionsCache(http);
@@ -100,7 +100,7 @@ test('searchOptions.get refuses a malformed itemtype before any request', async 
 });
 
 test('resolveField matches pt-BR labels ignoring case and accents', async () => {
-  // @ts-expect-error overriding global fetch
+  // @ts-expect-error substitui o fetch global
   global.fetch = mock.fn(async (url: string) => {
     if (url.endsWith('/initSession')) {
       return new Response(JSON.stringify({ session_token: 's' }), { status: 200 });

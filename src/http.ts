@@ -1,10 +1,10 @@
 /**
- * Unified HTTP layer for GLPI REST API.
+ * Camada HTTP unificada para a API REST do GLPI.
  *
- * - Single `request()` entry point used by every domain call.
- * - Auto re-authentication on 401 (expired session_token).
- * - Structured errors with HTTP status, GLPI error code/message, and full body.
- * - Optional retry with exponential backoff on 5xx.
+ * - Ponto de entrada único `request()` usado por todas as chamadas de domínio.
+ * - Reautenticação automática em 401 (session_token expirado).
+ * - Erros estruturados com status HTTP, código/mensagem de erro do GLPI e corpo completo.
+ * - Retry opcional com backoff exponencial em 5xx.
  */
 
 export interface GlpiHttpConfig {
@@ -13,11 +13,11 @@ export interface GlpiHttpConfig {
   userToken?: string;
   username?: string;
   password?: string;
-  /** Max retry attempts on 5xx (default 2). */
+  /** Máximo de tentativas de retry em 5xx (padrão 2). */
   maxRetries?: number;
-  /** Initial backoff in ms (default 300). */
+  /** Backoff inicial em ms (padrão 300). */
   retryBaseDelayMs?: number;
-  /** Request timeout in ms (default 15000). */
+  /** Timeout da requisição em ms (padrão 15000). */
   timeoutMs?: number;
 }
 
@@ -55,17 +55,17 @@ export class GlpiError extends Error {
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  /** Query parameters, appended to the URL. */
+  /** Parâmetros de query, anexados à URL. */
   query?: URLSearchParams | Record<string, string | number | boolean | undefined>;
-  /** JSON body, sent as `Content-Type: application/json`. */
+  /** Corpo JSON, enviado como `Content-Type: application/json`. */
   json?: unknown;
-  /** Multipart body (file uploads). Content-Type is set by fetch with the boundary. */
+  /** Corpo multipart (upload de arquivos). O Content-Type é definido pelo fetch, com o boundary. */
   form?: FormData;
-  /** Skip auto session init/reauth (used internally for initSession/killSession). */
+  /** Pula a abertura/reautenticação automática de sessão (uso interno em initSession/killSession). */
   noSession?: boolean;
-  /** Override auth header (used by initSession). */
+  /** Sobrescreve o cabeçalho de autenticação (usado por initSession). */
   authHeader?: string;
-  /** Capture response headers in the result. */
+  /** Captura os cabeçalhos da resposta no resultado. */
   withHeaders?: boolean;
 }
 
@@ -75,7 +75,7 @@ export interface RequestResult<T> {
   status: number;
 }
 
-/** Debug logging to stderr (stdout is reserved for the MCP stdio transport). */
+/** Log de depuração no stderr (o stdout é reservado ao transporte stdio do MCP). */
 function debugLog(message: string): void {
   if (process.env.GLPI_DEBUG) {
     console.error(`[glpi-http] ${new Date().toISOString()} ${message}`);
@@ -134,7 +134,7 @@ export class GlpiHttp {
     try {
       await this.request('killSession', { noSession: false });
     } catch {
-      // ignore
+      // ignora
     }
     this.sessionToken = null;
   }
@@ -165,8 +165,8 @@ export class GlpiHttp {
   }
 
   /**
-   * Unified GLPI request.
-   * - `path` is appended to `{baseUrl}/apirest.php/`. Do NOT URL-encode upfront.
+   * Requisição unificada ao GLPI.
+   * - `path` é anexado a `{baseUrl}/apirest.php/`. NÃO faça URL-encode antes.
    */
   async request<T = unknown>(
     path: string,
@@ -177,7 +177,7 @@ export class GlpiHttp {
     if (!options.noSession) await this.ensureSession();
 
     const headers: Record<string, string> = {};
-    // For multipart, fetch sets Content-Type itself (with the boundary).
+    // Em multipart, o próprio fetch define o Content-Type (com o boundary).
     if (!options.form) headers['Content-Type'] = 'application/json';
     if (this.config.appToken) headers['App-Token'] = this.config.appToken;
     if (this.sessionToken && !options.authHeader) {
@@ -192,8 +192,8 @@ export class GlpiHttp {
     if (options.form) init.body = options.form;
     else if (options.json !== undefined) init.body = JSON.stringify(options.json);
 
-    // POST is not idempotent: retrying a request that may have reached GLPI
-    // would duplicate tickets, followups and uploads.
+    // POST não é idempotente: repetir uma requisição que pode ter chegado ao GLPI
+    // duplicaria chamados, acompanhamentos e envios de arquivo.
     const maxRetries = this.config.maxRetries ?? 2;
     const retryable = method !== 'POST';
     const baseDelay = this.config.retryBaseDelayMs ?? 300;
@@ -206,7 +206,7 @@ export class GlpiHttp {
       try {
         response = await this.fetchWithTimeout(fullUrl, init);
       } catch (err) {
-        // Network error or timeout -> retry with backoff.
+        // Erro de rede ou timeout -> retry com backoff.
         if (retryable && attempt < maxRetries) {
           const delay = baseDelay * Math.pow(2, attempt);
           debugLog(`${method} ${path} network error (${err instanceof Error ? err.message : err}), retry in ${delay}ms`);
@@ -222,7 +222,7 @@ export class GlpiHttp {
         return { data, headers: response.headers, status: response.status };
       }
 
-      // 401 -> session likely expired. Reauth once, retry once.
+      // 401 -> a sessão provavelmente expirou. Reautentica uma vez e repete uma vez.
       if (response.status === 401 && !reauthAttempted && !options.noSession) {
         reauthAttempted = true;
         this.sessionToken = null;
@@ -232,7 +232,7 @@ export class GlpiHttp {
         continue;
       }
 
-      // 429 -> honour Retry-After header if present, else exponential backoff.
+      // 429 -> respeita o cabeçalho Retry-After se existir; senão, backoff exponencial.
       if (response.status === 429 && attempt < maxRetries) {
         const retryAfter = Number(response.headers.get('retry-after'));
         const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelay * Math.pow(2, attempt);
@@ -242,7 +242,7 @@ export class GlpiHttp {
         continue;
       }
 
-      // 5xx -> exponential backoff retry.
+      // 5xx -> retry com backoff exponencial.
       if (response.status >= 500 && retryable && attempt < maxRetries) {
         const delay = baseDelay * Math.pow(2, attempt);
         debugLog(`${method} ${path} -> ${response.status}, retry in ${delay}ms`);
@@ -278,13 +278,13 @@ export class GlpiHttp {
     let glpiMessage: string | undefined;
     try {
       const parsed = JSON.parse(body);
-      // GLPI returns errors as ["ERROR_CODE", "message"]
+      // O GLPI devolve erros como ["CODIGO_DO_ERRO", "mensagem"]
       if (Array.isArray(parsed) && parsed.length >= 1 && typeof parsed[0] === 'string') {
         glpiCode = parsed[0];
         glpiMessage = typeof parsed[1] === 'string' ? parsed[1] : undefined;
       }
     } catch {
-      // body is not JSON; leave glpiCode/Message undefined
+      // o corpo não é JSON; deixa glpiCode/glpiMessage indefinidos
     }
     return new GlpiError({
       status: response.status,

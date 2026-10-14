@@ -1,11 +1,11 @@
 /**
- * Tests for GlpiSearch (range building) and SearchOptionsCache (field
- * resolution on a localized instance).
+ * Testes do GlpiSearch (montagem do range) e do SearchOptionsCache (resolução
+ * de campos numa instância traduzida).
  *
- * Regression coverage for two bugs found against a live GLPI 11 (French):
- *   - search() passed `limit` as the range END: limit 5 -> "0-5" -> 6 rows.
- *   - resolveField() only matched localized labels ("Statut"), never the
- *     locale-independent column name ("status") or canonical uid.
+ * Cobertura de regressão de dois bugs encontrados num GLPI 11 real (em francês):
+ *   - search() passava `limit` como FIM do range: limit 5 -> "0-5" -> 6 linhas.
+ *   - resolveField() só casava rótulos traduzidos ("Statut"), nunca o nome da
+ *     coluna independente de idioma ("status") nem o uid canônico.
  */
 
 import { strict as assert } from 'node:assert';
@@ -17,7 +17,7 @@ import { SearchOptionsCache } from '../src/search-options.js';
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
 function installFetch(handler: FetchHandler) {
-  // @ts-expect-error overriding global fetch
+  // @ts-expect-error substitui o fetch global
   global.fetch = mock.fn(handler);
 }
 
@@ -59,8 +59,8 @@ test('count() probes with range=0-0 and returns totalcount', async () => {
   assert.equal(capturedRange, '0-0');
 });
 
-// Catalogue shaped like a real GLPI 11 French instance (labels localized,
-// field/uid locale-independent, "name" column duplicated via joined tables).
+// Catálogo no formato de uma instância real do GLPI 11 em francês (rótulos traduzidos,
+// field/uid independentes de idioma, coluna "name" duplicada por tabelas juntadas).
 const FRENCH_TICKET_OPTIONS = {
   '1': { name: 'Titre', table: 'glpi_tickets', field: 'name', uid: 'Ticket.name', datatype: 'itemlink' },
   '2': { name: 'ID', table: 'glpi_tickets', field: 'id', uid: 'Ticket.id', datatype: 'number' },
@@ -83,16 +83,16 @@ test('resolveField works on a localized (French) instance', async () => {
   installCatalogueFetch();
   const cache = new SearchOptionsCache(authedHttp());
 
-  // Locale-independent column name — the case that failed live.
+  // Nome de coluna independente de idioma — o caso que falhava ao vivo.
   assert.equal(await cache.resolveField('Ticket', 'status'), 12);
-  // Localized label still works.
+  // O rótulo traduzido continua funcionando.
   assert.equal(await cache.resolveField('Ticket', 'Statut'), 12);
-  // Explicit uid.
+  // uid explícito.
   assert.equal(await cache.resolveField('Ticket', 'Ticket.status'), 12);
-  // Numeric passthrough.
+  // Número repassado como está.
   assert.equal(await cache.resolveField('Ticket', 12), 12);
   assert.equal(await cache.resolveField('Ticket', '12'), 12);
-  // Unknown stays undefined.
+  // Desconhecido continua indefinido.
   assert.equal(await cache.resolveField('Ticket', 'does_not_exist'), undefined);
 });
 
@@ -100,7 +100,7 @@ test('resolveField prefers the own-table option on column-name collisions', asyn
   installCatalogueFetch();
   const cache = new SearchOptionsCache(authedHttp());
 
-  // "name" exists on glpi_tickets (id 1, canonical uid Ticket.name) AND on
-  // glpi_users via the requester join (id 4). The own-table one must win.
+  // "name" existe em glpi_tickets (id 1, uid canônico Ticket.name) E em
+  // glpi_users pelo join de requerente (id 4). A da própria tabela deve vencer.
   assert.equal(await cache.resolveField('Ticket', 'name'), 1);
 });

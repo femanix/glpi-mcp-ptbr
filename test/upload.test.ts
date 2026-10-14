@@ -1,12 +1,12 @@
 /**
- * Tests for document upload (multipart POST /Document).
+ * Testes do envio de documentos (POST /Document multipart).
  *
- * Run with: npm test
+ * Execute com: npm test
  *
- * These tests verify:
- *   - form option sends FormData without a JSON Content-Type (fetch sets the boundary)
- *   - uploadDocument builds the GLPI uploadManifest + filename[0] pair
- *   - the file part and the manifest `_filename` entry carry the same name
+ * Estes testes verificam:
+ *   - a opção form envia FormData sem Content-Type JSON (o fetch define o boundary)
+ *   - uploadDocument monta o par uploadManifest + filename[0] do GLPI
+ *   - a parte do arquivo e a entrada `_filename` do manifesto têm o mesmo nome
  */
 
 import { strict as assert } from 'node:assert';
@@ -17,7 +17,7 @@ import { GlpiClient } from '../src/glpi-client.js';
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
 function installFetch(handler: FetchHandler) {
-  // @ts-expect-error overriding global fetch
+  // @ts-expect-error substitui o fetch global
   global.fetch = mock.fn(handler);
 }
 

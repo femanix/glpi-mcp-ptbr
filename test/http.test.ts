@@ -1,13 +1,13 @@
 /**
- * Integration tests for GlpiHttp using a mocked fetch.
+ * Testes de integração do GlpiHttp usando um fetch simulado.
  *
- * Run with: npm test
+ * Execute com: npm test
  *
- * These tests verify:
- *   - Session initialization with user_token
- *   - Auto re-authentication on 401
- *   - 5xx retry with exponential backoff
- *   - Structured error parsing of GLPI ["CODE", "message"] body
+ * Estes testes verificam:
+ *   - Abertura de sessão com user_token
+ *   - Reautenticação automática em 401
+ *   - Retry em 5xx com backoff exponencial
+ *   - Leitura estruturada do corpo de erro do GLPI ["CODIGO", "mensagem"]
  */
 
 import { strict as assert } from 'node:assert';
@@ -17,12 +17,12 @@ import { GlpiHttp, GlpiError } from '../src/http.js';
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
 function installFetch(handler: FetchHandler) {
-  // @ts-expect-error overriding global fetch
+  // @ts-expect-error substitui o fetch global
   global.fetch = mock.fn(handler);
 }
 
 beforeEach(() => {
-  // Reset between tests
+  // Reinicia entre os testes
 });
 
 test('initSession with userToken stores session_token', async () => {
@@ -142,7 +142,7 @@ test('request aborts after timeoutMs', async () => {
     if (url.endsWith('/initSession')) {
       return new Response(JSON.stringify({ session_token: 's' }), { status: 200 });
     }
-    // Simulate a hanging request that only resolves via abort signal.
+    // Simula uma requisição travada que só termina pelo sinal de abort.
     return new Promise((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => {
         const err = new Error('aborted');

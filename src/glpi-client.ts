@@ -1,17 +1,17 @@
 /**
- * GLPI REST API Client v3.0
+ * Cliente da API REST do GLPI v3.0
  *
- * Thin orchestrator on top of:
- *   - GlpiHttp (unified request layer with re-auth + error structuring)
- *   - GlpiSearch (multi-criteria search, count, fetch_all)
- *   - SearchOptionsCache (/listSearchOptions/{itemtype} catalogue)
+ * Orquestrador fino sobre:
+ *   - GlpiHttp (camada de requisição unificada, com reautenticação e erros estruturados)
+ *   - GlpiSearch (busca com múltiplos critérios, count, fetch_all)
+ *   - SearchOptionsCache (catálogo de /listSearchOptions/{itemtype})
  *
- * Domain methods keep their v2 names for compatibility, but their behaviour
- * has been hardened:
- *   - All list endpoints accept `range`, `sort`, `order`, `expand_dropdowns`.
- *   - Reading endpoints default to `expand_dropdowns=true` so foreign-key IDs
- *     come back resolved (technician name, category label, entity, ...).
- *   - Bug fixes from v2 audit: is_active filter, group assignment, stats.
+ * Os métodos de domínio mantêm os nomes da v2 por compatibilidade, mas o
+ * comportamento foi reforçado:
+ *   - Todos os endpoints de lista aceitam `range`, `sort`, `order`, `expand_dropdowns`.
+ *   - Os endpoints de leitura usam `expand_dropdowns=true` por padrão, então os ids
+ *     de chaves estrangeiras voltam resolvidos (nome do técnico, rótulo da categoria, entidade, ...).
+ *   - Correções da auditoria da v2: filtro is_active, atribuição a grupo, estatísticas.
  */
 
 import { GlpiHttp, GlpiHttpConfig } from './http.js';
@@ -19,7 +19,7 @@ import { GlpiSearch, SearchCriterion } from './search.js';
 import { SearchOptionsCache } from './search-options.js';
 
 // ============================================================================
-// CONFIG / INTERFACES
+// CONFIGURAÇÃO / INTERFACES
 // ============================================================================
 
 export interface GlpiConfig extends GlpiHttpConfig {}
@@ -352,13 +352,13 @@ export interface GlpiDocument {
 }
 
 // ============================================================================
-// LIST / GET OPTIONS
+// OPÇÕES DE LISTAGEM / LEITURA
 // ============================================================================
 
 export interface ListOptions {
-  /** "START-END" range, e.g. "0-49". Default: "0-49". */
+  /** Intervalo "INÍCIO-FIM", ex.: "0-49". Padrão: "0-49". */
   range?: string;
-  /** Field id to sort by. */
+  /** Id do campo para ordenação. */
   sort?: number;
   order?: 'ASC' | 'DESC';
   is_deleted?: boolean;
@@ -371,7 +371,7 @@ export interface ListOptions {
   with_problems?: boolean;
   with_changes?: boolean;
   with_logs?: boolean;
-  /** Free-text "searchText[field]=value" filters. */
+  /** Filtros de texto livre "searchText[field]=value". */
   searchText?: Record<string, string>;
 }
 
@@ -391,7 +391,7 @@ export interface GetOptions {
 }
 
 // ============================================================================
-// CLIENT
+// CLIENTE
 // ============================================================================
 
 export class GlpiClient {
@@ -405,7 +405,7 @@ export class GlpiClient {
     this.searchOptions = new SearchOptionsCache(this.http);
   }
 
-  // ---- session ----
+  // ---- sessão ----
 
   async initSession() {
     return this.http.initSession();
@@ -415,7 +415,7 @@ export class GlpiClient {
     return this.http.killSession();
   }
 
-  // ---- generic CRUD helpers ----
+  // ---- auxiliares genéricos de CRUD ----
 
   private toQuery(o: ListOptions | GetOptions): Record<string, string> {
     const q: Record<string, string> = {};
@@ -452,7 +452,7 @@ export class GlpiClient {
   }
 
   async getItem<T>(itemtype: string, id: number, options: GetOptions = {}): Promise<T> {
-    // Default expand_dropdowns=true on detail views for human-readable output.
+    // Usa expand_dropdowns=true por padrão nas telas de detalhe, para a saída ser legível.
     const opts = { expand_dropdowns: true, ...options };
     const { data } = await this.http.request<T>(`${itemtype}/${id}`, {
       query: this.toQuery(opts),
@@ -496,7 +496,7 @@ export class GlpiClient {
     return true;
   }
 
-  // ---- TICKETS ----
+  // ---- CHAMADOS ----
 
   async getTickets(options: ListOptions = {}) {
     return this.getItems<GlpiTicket>('Ticket', options);
@@ -639,14 +639,14 @@ export class GlpiClient {
   }
 
   /**
-   * Assign ticket to user OR group. F12 fix: groups_id was silently dropped in v2.
+   * Atribui o chamado a um usuário OU a um grupo. Correção F12: groups_id era descartado em silêncio na v2.
    */
   async assignTicket(
     ticketId: number,
     options: {
       users_id?: number;
       groups_id?: number;
-      /** 1=requester, 2=assigned, 3=observer */
+      /** 1=requerente, 2=atribuído, 3=observador */
       type?: number;
     }
   ): Promise<{ id: number }> {
@@ -677,7 +677,7 @@ export class GlpiClient {
     return Array.isArray(data) ? data[0] : data;
   }
 
-  // ---- PROBLEMS ----
+  // ---- PROBLEMAS ----
 
   async getProblems(options: ListOptions = {}) {
     return this.getItems<GlpiProblem>('Problem', options);
@@ -700,7 +700,7 @@ export class GlpiClient {
     return this.updateItem('Problem', id, updates);
   }
 
-  // ---- CHANGES ----
+  // ---- MUDANÇAS ----
 
   async getChanges(options: ListOptions = {}) {
     return this.getItems<GlpiChange>('Change', options);
@@ -723,21 +723,21 @@ export class GlpiClient {
     return this.updateItem('Change', id, updates);
   }
 
-  // ---- USERS ----
+  // ---- USUÁRIOS ----
 
   /**
-   * F10 fix: filter active users via the /search endpoint (criteria field=8, equals)
-   * rather than searchText, which was doing a LIKE on the wrong column.
+   * Correção F10: filtra usuários ativos pelo endpoint /search (critério field=8, equals)
+   * em vez de searchText, que fazia um LIKE na coluna errada.
    */
   async getUsers(options: ListOptions & { is_active?: boolean } = {}) {
     if (options.is_active === undefined) {
       return this.getItems<GlpiUser>('User', options);
     }
-    // Use search to apply a proper equals filter on is_active.
+    // Usa a busca para aplicar um filtro equals de verdade em is_active.
     const result = await this.search.search<GlpiUser>('User', {
       criteria: [
         {
-          field: 8, // standard "is_active" search option id for User
+          field: 8, // id padrão da search option "is_active" de User
           searchtype: 'equals',
           value: options.is_active ? 1 : 0,
         },
@@ -781,7 +781,7 @@ export class GlpiClient {
     return this.updateItem('User', id, updates);
   }
 
-  // ---- GROUPS ----
+  // ---- GRUPOS ----
 
   async getGroups(options: ListOptions = {}) {
     return this.getItems<GlpiGroup>('Group', options);
@@ -821,7 +821,7 @@ export class GlpiClient {
     return Array.isArray(data) ? data[0] : data;
   }
 
-  // ---- COMPUTERS ----
+  // ---- COMPUTADORES ----
 
   async getComputers(options: ListOptions = {}) {
     return this.getItems<GlpiComputer>('Computer', options);
@@ -857,7 +857,7 @@ export class GlpiClient {
     return this.deleteItem('Software', id, force);
   }
 
-  // ---- NETWORK EQUIPMENT ----
+  // ---- EQUIPAMENTOS DE REDE ----
 
   async getNetworkEquipments(options: ListOptions = {}) {
     return this.getItems<GlpiNetworkEquipment>('NetworkEquipment', options);
@@ -875,7 +875,7 @@ export class GlpiClient {
     return this.deleteItem('NetworkEquipment', id, force);
   }
 
-  // ---- PRINTERS / MONITORS / PHONES ----
+  // ---- IMPRESSORAS / MONITORES / TELEFONES ----
 
   async getPrinters(options: ListOptions = {}) {
     return this.getItems<GlpiPrinter>('Printer', options);
@@ -919,7 +919,7 @@ export class GlpiClient {
     return this.deleteItem('Phone', id, force);
   }
 
-  // ---- KNOWLEDGE BASE ----
+  // ---- BASE DE CONHECIMENTO ----
 
   async getKnowbaseItems(options: ListOptions = {}) {
     return this.getItems<GlpiKnowbaseItem>('KnowbaseItem', options);
@@ -937,8 +937,8 @@ export class GlpiClient {
   }
 
   /**
-   * Robust KB search: resolves the "name" field id via SearchOptions instead of
-   * hardcoding `6` (which varies across GLPI versions).
+   * Busca robusta na base de conhecimento: resolve o id do campo "name" via SearchOptions
+   * em vez de fixar `6` (que varia entre versões do GLPI).
    */
   async searchKnowbase(query: string, limit: number = 50): Promise<GlpiKnowbaseItem[]> {
     const fieldId = (await this.searchOptions.resolveField('KnowbaseItem', 'name')) ?? 6;
@@ -950,7 +950,7 @@ export class GlpiClient {
     return result.data;
   }
 
-  // ---- CONTRACTS / SUPPLIERS / LOCATIONS / ENTITIES / PROJECTS / DOCUMENTS / CATEGORIES ----
+  // ---- CONTRATOS / FORNECEDORES / LOCALIZAÇÕES / ENTIDADES / PROJETOS / DOCUMENTOS / CATEGORIAS ----
 
   async getContracts(options: ListOptions = {}) { return this.getItems<GlpiContract>('Contract', options); }
   async getContract(id: number, options: GetOptions = {}) { return this.getItem<GlpiContract>('Contract', id, options); }
@@ -977,7 +977,7 @@ export class GlpiClient {
 
   async getCategories(options: ListOptions = {}) { return this.getItems<GlpiCategory>('ITILCategory', options); }
 
-  // ---- VALIDATIONS ----
+  // ---- VALIDAÇÕES ----
 
   async addTicketValidation(
     ticketId: number,
@@ -998,7 +998,7 @@ export class GlpiClient {
             comment_submission: options.comment_submission ?? '',
             submission_date:
               options.submission_date ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
-            status: 1, // 1=Waiting
+            status: 1, // 1=Aguardando
           },
         },
       }
@@ -1006,7 +1006,7 @@ export class GlpiClient {
     return Array.isArray(data) ? data[0] : data;
   }
 
-  /** Approve or refuse a validation. status: 2=granted, 3=refused */
+  /** Aprova ou recusa uma validação. status: 2=concedida, 3=recusada */
   async setTicketValidationStatus(
     validationId: number,
     status: 2 | 3,
@@ -1026,27 +1026,27 @@ export class GlpiClient {
     return true;
   }
 
-  // ---- DOCUMENT ATTACHMENT ----
+  // ---- ANEXO DE DOCUMENTOS ----
 
   /**
-   * Upload a file as a GLPI Document (multipart POST /Document).
-   * GLPI matches the file part against the manifest's `_filename` entry,
-   * so `filename` must be identical in both parts.
+   * Envia um arquivo como Documento do GLPI (POST /Document multipart).
+   * O GLPI associa a parte do arquivo à entrada `_filename` do manifesto,
+   * então `filename` precisa ser idêntico nas duas partes.
    *
-   * To link the document to an item in the same call, pass `itemtype` +
-   * `items_id` — GLPI creates the Document_Item itself. This also works for
-   * restricted profiles (e.g. Self-Service ticket requesters) that are not
-   * allowed to POST Document_Item directly.
+   * Para vincular o documento a um item na mesma chamada, informe `itemtype` +
+   * `items_id`: o próprio GLPI cria o Document_Item. Isso também funciona para
+   * perfis restritos (ex.: requerentes de chamado no Self-Service) que não podem
+   * fazer POST direto em Document_Item.
    */
   async uploadDocument(options: {
-    /** File name as stored in GLPI (e.g. "screenshot.png"). */
+    /** Nome do arquivo como guardado no GLPI (ex.: "screenshot.png"). */
     filename: string;
-    /** Raw file content. */
+    /** Conteúdo bruto do arquivo. */
     data: Uint8Array;
-    /** Document title (defaults to `filename`). */
+    /** Título do documento (padrão: `filename`). */
     name?: string;
     mimeType?: string;
-    /** Item to link the document to on creation (e.g. "Ticket"). */
+    /** Item ao qual o documento é vinculado na criação (ex.: "Ticket"). */
     itemtype?: string;
     items_id?: number;
   }): Promise<{ id: number }> {
@@ -1059,8 +1059,8 @@ export class GlpiClient {
       },
     });
     const form = new FormData();
-    // Append as a plain string field: parts with a filename land in PHP's
-    // $_FILES, and GLPI reads the manifest from $_POST.
+    // Anexa como campo de texto simples: partes com nome de arquivo vão para o
+    // $_FILES do PHP, e o GLPI lê o manifesto de $_POST.
     form.append('uploadManifest', manifest);
     form.append(
       'filename[0]',
@@ -1075,8 +1075,8 @@ export class GlpiClient {
   }
 
   /**
-   * Attach an existing document (by id) to a ticket via Document_Item.
-   * Use this after uploading the file via /Document.
+   * Anexa um documento existente (por id) a um chamado via Document_Item.
+   * Use depois de enviar o arquivo por /Document.
    */
   async attachDocumentToTicket(
     ticketId: number,
@@ -1098,7 +1098,7 @@ export class GlpiClient {
     return Array.isArray(data) ? data[0] : data;
   }
 
-  // ---- SATISFACTION ----
+  // ---- SATISFAÇÃO ----
 
   async getTicketSatisfaction(ticketId: number) {
     const { data } = await this.http.request<unknown[]>(
@@ -1107,9 +1107,9 @@ export class GlpiClient {
     return data ?? [];
   }
 
-  // ---- LINKS ----
+  // ---- VÍNCULOS ----
 
-  /** Link two tickets. linkType: 1=link, 2=duplicate, 3=parent (link), 4=son (linked) */
+  /** Vincula dois chamados. linkType: 1=vínculo, 2=duplicado, 3=pai (vínculo), 4=filho (vinculado) */
   async linkTickets(parentId: number, childId: number, linkType: number = 1): Promise<{ id: number }> {
     const { data } = await this.http.request<{ id: number } | Array<{ id: number }>>(
       'Ticket_Ticket',
@@ -1127,7 +1127,7 @@ export class GlpiClient {
     return Array.isArray(data) ? data[0] : data;
   }
 
-  // ---- STATISTICS (F9 fix: use count probes instead of fetching all then filtering) ----
+  // ---- ESTATÍSTICAS (correção F9: usa sondas de contagem em vez de buscar tudo e filtrar) ----
 
   async getTicketStats(filters: {
     entity_id?: number;
@@ -1203,7 +1203,7 @@ export class GlpiClient {
     return { computers, monitors, printers, networkEquipments, phones, softwares };
   }
 
-  // ---- SESSION INFO ----
+  // ---- INFORMAÇÕES DA SESSÃO ----
 
   async getMyProfiles() {
     const { data } = await this.http.request<unknown[]>('getMyProfiles');

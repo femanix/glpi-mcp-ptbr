@@ -1,13 +1,13 @@
 /**
- * SearchOptions cache + helpers.
+ * Cache de SearchOptions + auxiliares.
  *
- * GLPI exposes `/listSearchOptions/{itemtype}` which returns the catalogue of
- * searchable fields for an itemtype. Each entry is keyed by a numeric field_id
- * and carries human-readable metadata (name, table, datatype, available_searchtypes).
+ * O GLPI expõe `/listSearchOptions/{itemtype}`, que devolve o catálogo de campos
+ * pesquisáveis de um itemtype. Cada entrada é indexada por um field_id numérico
+ * e traz metadados legíveis (name, table, datatype, available_searchtypes).
  *
- * We cache the catalogue per itemtype (TTL configurable, default 1h) so that:
- *   - high-level tools can translate friendly param names → criteria field_id
- *   - list/search responses can be enriched with field labels
+ * O catálogo fica em cache por itemtype (TTL configurável, padrão 1h) para que:
+ *   - as ferramentas de alto nível traduzam nomes amigáveis de parâmetro → field_id dos critérios
+ *   - as respostas de list/search possam ser enriquecidas com rótulos de campo
  */
 
 import { GlpiHttp } from './http.js';
@@ -21,7 +21,7 @@ export interface SearchOption {
   datatype?: string;
   uid?: string;
   available_searchtypes?: string[];
-  /** Raw entry from GLPI, kept for debugging / advanced cases. */
+  /** Entrada bruta do GLPI, guardada para depuração / casos avançados. */
   raw: Record<string, unknown>;
 }
 
@@ -31,13 +31,13 @@ export interface SearchOptionsCatalogue {
   byId: Map<number, SearchOption>;
   byUid: Map<string, SearchOption>;
   byName: Map<string, SearchOption>;
-  /** Keyed by raw SQL column name (locale-independent). Own-table options win collisions. */
+  /** Indexado pelo nome bruto da coluna SQL (independe do idioma). Opções da própria tabela vencem colisões. */
   byField: Map<string, SearchOption>;
 }
 
-const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
+const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hora
 
-/** Case- and accent-insensitive key, so "titulo" matches the pt-BR label "Título". */
+/** Chave sem distinção de caixa e acento: "titulo" casa com o rótulo pt-BR "Título". */
 export function normalizeName(name: string): string {
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
@@ -64,21 +64,21 @@ export class SearchOptionsCache {
     return catalogue;
   }
 
-  /** Invalidate cache for one itemtype, or all if no argument. */
+  /** Invalida o cache de um itemtype, ou de todos se não houver argumento. */
   invalidate(itemtype?: string) {
     if (itemtype) this.cache.delete(itemtype);
     else this.cache.clear();
   }
 
   /**
-   * Resolve a friendly name to a field_id.
+   * Resolve um nome amigável para um field_id.
    *
-   * Lookup order (most to least precise):
-   *   1. numeric id passed through
-   *   2. explicit uid ("Ticket.status")
-   *   3. canonical own-table uid built as "{itemtype}.{ref}" — locale-independent
-   *   4. localized label, ignoring case and accents ("Título", "Status", ...)
-   *   5. raw SQL column name ("status") — locale-independent fallback
+   * Ordem de busca (da mais precisa para a menos precisa):
+   *   1. id numérico repassado como está
+   *   2. uid explícito ("Ticket.status")
+   *   3. uid canônico da própria tabela, montado como "{itemtype}.{ref}" — independe do idioma
+   *   4. rótulo traduzido, ignorando caixa e acentos ("Título", "Status", ...)
+   *   5. nome bruto da coluna SQL ("status") — alternativa que independe do idioma
    */
   async resolveField(itemtype: string, ref: string | number): Promise<number | undefined> {
     if (typeof ref === 'number') return ref;
@@ -101,7 +101,7 @@ export class SearchOptionsCache {
 
     for (const [key, value] of Object.entries(data)) {
       const id = parseInt(key, 10);
-      if (Number.isNaN(id)) continue; // skip metadata entries like "common"
+      if (Number.isNaN(id)) continue; // ignora entradas de metadados como "common"
       if (!value || typeof value !== 'object') continue;
       const entry = value as Record<string, unknown>;
 
@@ -123,9 +123,9 @@ export class SearchOptionsCache {
       if (option.name && !byName.has(normalizeName(option.name))) {
         byName.set(normalizeName(option.name), option);
       }
-      // The same column name can appear via joined tables (e.g. "name" on
-      // glpi_tickets AND glpi_users for requester/technician). The option
-      // whose uid is exactly "{itemtype}.{field}" (own table) always wins.
+      // O mesmo nome de coluna pode aparecer em tabelas juntadas (ex.: "name" em
+      // glpi_tickets E em glpi_users, para requerente/técnico). A opção cujo uid
+      // é exatamente "{itemtype}.{field}" (tabela própria) sempre vence.
       if (option.field) {
         const fieldKey = option.field.toLowerCase();
         const isCanonical = option.uid === `${itemtype}.${option.field}`;

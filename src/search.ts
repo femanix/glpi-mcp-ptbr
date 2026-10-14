@@ -1,12 +1,12 @@
 /**
- * High-level search/count/fetch_all over GLPI's /search/{itemtype} endpoint.
+ * Busca, contagem e fetch_all de alto nível sobre o endpoint /search/{itemtype} do GLPI.
  *
- * Features:
- *   - Multi-criteria with link operator (AND / OR / AND NOT / OR NOT).
- *   - forcedisplay (choose returned columns).
- *   - Reads totalcount + Content-Range header.
- *   - fetch_all: paginates until totalcount reached, capped by maxRows.
- *   - Optional sort + order.
+ * Recursos:
+ *   - Múltiplos critérios com operador link (AND / OR / AND NOT / OR NOT).
+ *   - forcedisplay (escolhe as colunas devolvidas).
+ *   - Lê totalcount + o cabeçalho Content-Range.
+ *   - fetch_all: pagina até alcançar o totalcount, limitado por maxRows.
+ *   - sort + order opcionais.
  */
 
 import { GlpiHttp } from './http.js';
@@ -30,28 +30,28 @@ export interface SearchCriterion {
   field: number;
   searchtype: SearchType;
   value: string | number | boolean;
-  /** Combination operator with the previous criterion. Ignored on the first one. */
+  /** Operador de combinação com o critério anterior. Ignorado no primeiro. */
   link?: SearchLink;
 }
 
 export interface SearchOptions {
   criteria?: SearchCriterion[];
-  /** field_id list to return; if undefined, GLPI uses its default. */
+  /** Lista de field_id a devolver; se indefinida, o GLPI usa o padrão dele. */
   forcedisplay?: number[];
-  /** First row (0-indexed). */
+  /** Primeira linha (índice 0). */
   start?: number;
-  /** Maximum rows for this single call. */
+  /** Máximo de linhas desta chamada. */
   limit?: number;
-  /** Sort by field_id (search option id). */
+  /** Ordena por field_id (id da search option). */
   sort?: number;
   order?: 'ASC' | 'DESC';
-  /** If true, paginate until totalcount is reached (or maxRows is hit). */
+  /** Se true, pagina até alcançar o totalcount (ou atingir maxRows). */
   fetchAll?: boolean;
-  /** Safety cap when fetchAll=true (default 1000). */
+  /** Limite de segurança quando fetchAll=true (padrão 1000). */
   maxRows?: number;
-  /** Pass `expand_dropdowns=true` for resolved labels. */
+  /** Passe `expand_dropdowns=true` para receber os rótulos resolvidos. */
   expandDropdowns?: boolean;
-  /** Pass `giveItems=true` to receive raw items. */
+  /** Passe `giveItems=true` para receber os itens brutos. */
   giveItems?: boolean;
 }
 
@@ -61,7 +61,7 @@ export interface SearchResponse<T = Record<string, unknown>> {
   count: number;
   start: number;
   data: T[];
-  /** Raw Content-Range header value, if present. */
+  /** Valor bruto do cabeçalho Content-Range, se presente. */
   contentRange?: string;
 }
 
@@ -72,7 +72,7 @@ export class GlpiSearch {
   constructor(private http: GlpiHttp) {}
 
   /**
-   * Execute a search call (single page or fetch_all loop).
+   * Executa uma busca (página única ou laço de fetch_all).
    */
   async search<T = Record<string, unknown>>(
     itemtype: string,
@@ -82,12 +82,12 @@ export class GlpiSearch {
 
     const start = options.start ?? 0;
     const limit = options.limit ?? DEFAULT_PAGE;
-    // GLPI ranges are inclusive: "0-4" returns 5 rows.
+    // Os intervalos do GLPI são inclusivos: "0-4" devolve 5 linhas.
     return this.fetchPage<T>(itemtype, options, start, start + Math.max(1, limit) - 1);
   }
 
   /**
-   * Return only totalcount for the given criteria. Cheap probe (range=0-0).
+   * Devolve só o totalcount dos critérios dados. Sonda barata (range=0-0).
    */
   async count(
     itemtype: string,
@@ -132,7 +132,7 @@ export class GlpiSearch {
     const contentRange = headers.get('content-range') ?? undefined;
     let totalcount = data.totalcount ?? 0;
     if (!totalcount && contentRange) {
-      // Format: "start-end/total"
+      // Formato: "início-fim/total"
       const match = contentRange.match(/\/(\d+)$/);
       if (match) totalcount = parseInt(match[1], 10);
     }

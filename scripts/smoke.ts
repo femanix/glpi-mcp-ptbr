@@ -1,19 +1,19 @@
 /**
- * Live smoke test against a real GLPI instance.
+ * Teste de fumaça ao vivo contra uma instância real do GLPI.
  *
- * Usage:
- *   npm run smoke              # read-only checks
- *   npm run smoke -- --write   # also run the write cycle (test ticket create -> soft delete)
+ * Uso:
+ *   npm run smoke              # verificações somente de leitura
+ *   npm run smoke -- --write   # também roda o ciclo de escrita (cria chamado de teste -> exclusão lógica)
  *
- * Reads GLPI_URL / GLPI_APP_TOKEN / GLPI_USER_TOKEN (or GLPI_USERNAME+GLPI_PASSWORD)
- * from the environment, falling back to a .env file at the repo root.
+ * Lê GLPI_URL / GLPI_APP_TOKEN / GLPI_USER_TOKEN (ou GLPI_USERNAME+GLPI_PASSWORD)
+ * do ambiente, usando como alternativa um arquivo .env na raiz do repositório.
  */
 
 import { readFileSync } from 'node:fs';
 import { GlpiClient } from '../src/glpi-client.js';
 import { GlpiError } from '../src/http.js';
 
-// --- tiny .env loader (no dependency) --------------------------------------
+// --- carregador de .env mínimo (sem dependência) --------------------------
 try {
   const envFile = readFileSync(new URL('../.env', import.meta.url), 'utf8');
   for (const line of envFile.split('\n')) {
@@ -21,7 +21,7 @@ try {
     if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
   }
 } catch {
-  // no .env file — rely on the environment
+  // sem arquivo .env — usa o ambiente
 }
 
 const WRITE = process.argv.includes('--write');
@@ -41,7 +41,7 @@ const client = new GlpiClient({
   timeoutMs: process.env.GLPI_TIMEOUT_MS ? parseInt(process.env.GLPI_TIMEOUT_MS, 10) : 15000,
 });
 
-// --- harness ----------------------------------------------------------------
+// --- estrutura de testes ----------------------------------------------------
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
@@ -67,11 +67,11 @@ async function check(name: string, fn: () => Promise<string | void>): Promise<bo
   }
 }
 
-// --- main -------------------------------------------------------------------
+// --- principal --------------------------------------------------------------
 async function main() {
   console.log(`\nSmoke test against ${url} ${WRITE ? '(read + write cycle)' : '(read-only)'}\n`);
 
-  // ---- session ----
+  // ---- sessão ----
   console.log('Session:');
   const sessionOk = await check('initSession', async () => {
     await client.initSession();
@@ -88,7 +88,7 @@ async function main() {
     return `${n} profile(s)`;
   });
 
-  // ---- search options / field resolution ----
+  // ---- search options / resolução de campos ----
   console.log('\nSearchOptions cache:');
   await check('searchOptions.get(Ticket)', async () => {
     const cat = await client.searchOptions.get('Ticket');
@@ -101,7 +101,7 @@ async function main() {
     return `field_id ${id}`;
   });
 
-  // ---- read: tickets ----
+  // ---- leitura: chamados ----
   console.log('\nTickets (read):');
   await check('count(Ticket)', async () => {
     const n = await client.search.count('Ticket');
@@ -154,7 +154,7 @@ async function main() {
     });
   }
 
-  // ---- read: other domains ----
+  // ---- leitura: outros domínios ----
   console.log('\nOther domains (read):');
   await check('getUsers(active, limit 5)', async () => {
     const users = (await client.getUsers({ range: '0-4', is_active: true })) as any[];
@@ -177,7 +177,7 @@ async function main() {
     return `${e.length} rows`;
   });
 
-  // ---- write cycle ----
+  // ---- ciclo de escrita ----
   if (WRITE) {
     console.log('\nWrite cycle (test ticket):');
     let testId: number | undefined;
@@ -216,7 +216,7 @@ async function main() {
     }
   }
 
-  // ---- teardown ----
+  // ---- encerramento ----
   console.log('\nTeardown:');
   await check('killSession', async () => {
     await client.killSession();
