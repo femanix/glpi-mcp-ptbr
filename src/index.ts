@@ -283,7 +283,7 @@ function formatTicketSummary(t: any) {
 // ---------------------------------------------------------------------------
 
 const server = new Server(
-  { name: 'glpi-rj-mcp', version: '3.0.0' },
+  { name: 'glpi-mcp-ptbr', version: '3.0.0' },
   { capabilities: { tools: {}, resources: {} } }
 );
 
