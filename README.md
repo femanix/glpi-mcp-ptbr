@@ -1,14 +1,20 @@
-# glpi-rj-mcp — Servidor MCP para GLPI
+# glpi-mcp-ptbr: Servidor MCP para GLPI
 
 Servidor [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) que
 expõe o GLPI (gestão de serviços de TI) para assistentes de IA como o Claude.
 
-Projeto em português do Brasil, com endurecimento de segurança para uso
-interno. O histórico de mudanças está no [CHANGELOG.md](./CHANGELOG.md); o
+Projeto em português do Brasil, com camadas extras de segurança para uso com agentes de IA. O histórico de mudanças está no [CHANGELOG.md](./CHANGELOG.md); o
 restante deste README descreve o que o servidor expõe hoje.
 
 Baseado no [mcp-glpi](https://github.com/GMS64260/mcp-glpi) de GMS64260,
 licenciado sob MIT.
+
+## O que este fork adiciona
+
+- **Segurança**: modo somente leitura (`GLPI_READ_ONLY`), envio de arquivos restrito a uma pasta (`GLPI_UPLOAD_DIR`, com proteção contra links simbólicos), validação do `itemtype` antes de montar a URL e `https://` obrigatório.
+- **Sem duplicar dados**: requisições POST não são repetidas em erro de rede nem em 5xx, então uma falha de conexão não cria o mesmo chamado duas vezes.
+- **Português do Brasil**: textos das ferramentas, README, CHANGELOG e comentários do código em pt-BR, e busca de campos sem distinção de acento.
+- **Testes** para as proteções novas e dependências sem vulnerabilidades conhecidas no `npm audit`.
 
 ## O que tem na v3
 
@@ -73,7 +79,7 @@ proteções deste repositório.
   "mcpServers": {
     "glpi": {
       "command": "node",
-      "args": ["/caminho/para/glpi-mcp/dist/index.js"],
+      "args": ["/caminho/para/glpi-mcp-ptbr/dist/index.js"],
       "env": {
         "GLPI_URL": "https://glpi.example.com",
         "GLPI_APP_TOKEN": "...",
@@ -249,8 +255,8 @@ Os rótulos abaixo seguem os nomes do GLPI em português do Brasil.
 ## Desenvolvimento
 
 ```bash
-git clone https://github.com/femanix/glpi-rj-mcp.git
-cd glpi-rj-mcp
+git clone https://github.com/femanix/glpi-mcp-ptbr.git
+cd glpi-mcp-ptbr
 npm install
 npm run build
 npm test          # node --test via tsx, fetch simulado
