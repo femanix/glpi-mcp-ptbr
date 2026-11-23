@@ -1,11 +1,11 @@
 {
-  "name": "glpi-rj-mcp",
+  "name": "glpi-mcp-ptbr",
   "version": "3.3.0",
   "description": "Servidor MCP para GLPI: gestão de serviços de TI para o Claude. Busca com múltiplos critérios, paginação, resolução dinâmica de campos, linha do tempo de chamados, cobertura ITIL (incidentes, problemas, mudanças, validações), CMDB de ativos e relatórios.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "glpi-rj-mcp": "dist/index.js"
+    "glpi-mcp-ptbr": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -44,12 +44,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/femanix/glpi-rj-mcp.git"
+    "url": "https://github.com/femanix/glpi-mcp-ptbr.git"
   },
   "bugs": {
-    "url": "https://github.com/femanix/glpi-rj-mcp/issues"
+    "url": "https://github.com/femanix/glpi-mcp-ptbr/issues"
   },
-  "homepage": "https://github.com/femanix/glpi-rj-mcp#readme",
+  "homepage": "https://github.com/femanix/glpi-mcp-ptbr#readme",
   "engines": {
     "node": ">=18.0.0"
   },
